@@ -7,6 +7,7 @@ const sans = DM_Sans({ variable: '--font-sans', subsets: ['latin'] });
 const display = Fraunces({ variable: '--font-display', subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://stampstaff-prototype.langaz35.chatgpt.site'),
   title: 'StamStaff — Reserve your next shift',
   description: 'A fictional interactive prototype for simple event availability and rostering.',
   applicationName: 'StamStaff',

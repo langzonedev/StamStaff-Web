@@ -6,6 +6,8 @@ Public, external-facing PWA prototype for **StamStaff — simple event availabil
 
 **Interactive fictional-data prototype.** The current build demonstrates staff shift reservation/release, manager confirmation, event entry and key failure/lock states. It does not provide real accounts, authentication, shared capacity, email delivery, durable storage or production rostering.
 
+**Phone test:** [Open the owner-only StamStaff prototype](https://stampstaff-prototype.langaz35.chatgpt.site)
+
 Planned prototype outcomes are described in [`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md). The private `langzonedev/StamStaff` repository is the authoritative source for customer requirements, business rules, shared services, security, and delivery decisions.
 
 ## Public data rule
