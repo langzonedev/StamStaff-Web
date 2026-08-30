@@ -1,28 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-
-type Shift = {
-  id: string;
-  date: string;
-  start: string;
-  finish: string;
-  places: number;
-  requests: string[];
-  assignments: string[];
-};
-type StaffEvent = {
-  id: string;
-  name: string;
-  date: string;
-  endDate: string;
-  location: string;
-  status: "draft" | "open" | "locked";
-  rosterPublished: boolean;
-  managerEditMode?: boolean;
-  lastChangeNote?: string;
-  shifts: Shift[];
-};
+import {
+  fictionalTeam,
+  legacyStorageKey,
+  memberName,
+  previewStaffId,
+  prototypeStorageKey,
+  readPrototypeEvents,
+  visibleAssignments,
+  writePrototypeEvents,
+  type Shift,
+  type StaffEvent,
+} from "./domain";
 type Screen =
   | "events"
   | "create"
@@ -48,8 +38,6 @@ const screens: Screen[] = [
   "my-shifts",
 ];
 
-const storageKey = "stampstaff.prototype.v2";
-const previewStaff = "Preview staff member";
 const newShift = (date = "", id = crypto.randomUUID()): Shift => ({
   id,
   date,
@@ -58,6 +46,7 @@ const newShift = (date = "", id = crypto.randomUUID()): Shift => ({
   places: 4,
   requests: [],
   assignments: [],
+  publishedAssignments: [],
 });
 const blankEvent = (): StaffEvent => ({
   id: crypto.randomUUID(),
@@ -66,6 +55,7 @@ const blankEvent = (): StaffEvent => ({
   endDate: "",
   location: "",
   status: "draft",
+  availabilityClosed: false,
   rosterPublished: false,
   shifts: [newShift()],
 });
@@ -76,6 +66,7 @@ const sampleEvent = (): StaffEvent => ({
   endDate: "2026-10-18",
   location: "Sample venue",
   status: "open",
+  availabilityClosed: false,
   rosterPublished: false,
   shifts: [
     {
@@ -84,8 +75,9 @@ const sampleEvent = (): StaffEvent => ({
       start: "09:00",
       finish: "13:00",
       places: 3,
-      requests: ["Alex Chen", "Jamie Brooks"],
+      requests: ["member-alex", "member-jamie"],
       assignments: [],
+      publishedAssignments: [],
     },
     {
       id: "sample-afternoon",
@@ -93,8 +85,9 @@ const sampleEvent = (): StaffEvent => ({
       start: "13:00",
       finish: "17:00",
       places: 2,
-      requests: ["Jamie Brooks"],
+      requests: ["member-jamie"],
       assignments: [],
+      publishedAssignments: [],
     },
     {
       id: "sample-sunday-morning",
@@ -102,8 +95,9 @@ const sampleEvent = (): StaffEvent => ({
       start: "08:00",
       finish: "12:00",
       places: 2,
-      requests: ["Alex Chen"],
+      requests: ["member-alex"],
       assignments: [],
+      publishedAssignments: [],
     },
     {
       id: "sample-sunday-afternoon",
@@ -111,22 +105,12 @@ const sampleEvent = (): StaffEvent => ({
       start: "12:00",
       finish: "16:00",
       places: 3,
-      requests: ["Jamie Brooks"],
+      requests: ["member-jamie"],
       assignments: [],
+      publishedAssignments: [],
     },
   ],
 });
-
-function normalizeEvent(event: StaffEvent): StaffEvent {
-  return {
-    ...event,
-    endDate: event.endDate || event.date,
-    shifts: event.shifts.map((shift) => ({
-      ...shift,
-      date: shift.date || event.date,
-    })),
-  };
-}
 
 function shiftsOverlap(first: Shift, second: Shift) {
   return (
@@ -195,10 +179,7 @@ export default function Home() {
   useEffect(() => {
     queueMicrotask(() => {
       try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          setEvents((JSON.parse(saved) as StaffEvent[]).map(normalizeEvent));
-        }
+        setEvents(readPrototypeEvents(localStorage));
       } catch {
         setNotice({
           tone: "warning",
@@ -223,7 +204,7 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(events));
+      writePrototypeEvents(localStorage, events);
     } catch {
       queueMicrotask(() =>
         setNotice({
@@ -407,7 +388,7 @@ export default function Home() {
   }
   function publishAvailability() {
     if (!current || current.status !== "draft") return;
-    updateCurrent((event) => ({ ...event, status: "open" }));
+    updateCurrent((event) => ({ ...event, status: "open", availabilityClosed: false }));
     setNotice({
       tone: "success",
       text: "Availability is open in this local preview. No messages were sent.",
@@ -424,6 +405,7 @@ export default function Home() {
     if (
       !current ||
       current.status !== "open" ||
+      current.availabilityClosed ||
       shift.requests.length >= shift.places
     )
       return;
@@ -446,7 +428,7 @@ export default function Home() {
             item.id === shift.id
               ? {
                   ...item,
-                  requests: [...item.requests, "Another staff member"].slice(
+                  requests: [...item.requests, "member-other"].slice(
                     0,
                     item.places,
                   ),
@@ -466,7 +448,7 @@ export default function Home() {
         ...event,
         shifts: event.shifts.map((item) =>
           item.id === shift.id
-            ? { ...item, requests: [...item.requests, previewStaff] }
+            ? { ...item, requests: [...item.requests, previewStaffId] }
             : item,
         ),
       }));
@@ -485,6 +467,17 @@ export default function Home() {
       });
       return;
     }
+    const targetEvent = events.find((event) => event.id === eventId);
+    if (!targetEvent || targetEvent.status !== "open" || targetEvent.availabilityClosed) {
+      setNotice({
+        tone: "warning",
+        text: "Requests are closed for this event. Contact the manager if your availability changed.",
+      });
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      );
+      return;
+    }
     setEvents((items) =>
       items.map((event) =>
         event.id === eventId
@@ -495,10 +488,10 @@ export default function Home() {
                   ? {
                       ...item,
                       requests: item.requests.filter(
-                        (name) => name !== previewStaff,
+                        (memberId) => memberId !== previewStaffId,
                       ),
                       assignments: item.assignments.filter(
-                        (name) => name !== previewStaff,
+                        (memberId) => memberId !== previewStaffId,
                       ),
                     }
                   : item,
@@ -511,6 +504,7 @@ export default function Home() {
   }
   function toggleAssignment(shiftId: string, name: string) {
     if (current?.status === "locked" && !current.managerEditMode) return;
+    if (current?.status === "open" && !current.availabilityClosed) return;
     const target = current?.shifts.find((shift) => shift.id === shiftId);
     const alreadySelected = target?.assignments.includes(name) ?? false;
     const overlap = current?.shifts.find(
@@ -523,7 +517,7 @@ export default function Home() {
     if (!alreadySelected && overlap) {
       setNotice({
         tone: "warning",
-        text: `${name} is already assigned to an overlapping shift (${overlap.start}–${overlap.finish}).`,
+        text: `${memberName(name)} is already assigned to an overlapping shift (${overlap.start}–${overlap.finish}).`,
       });
       return;
     }
@@ -546,11 +540,18 @@ export default function Home() {
     const updatingLockedRoster = Boolean(
       current?.status === "locked" && current.managerEditMode,
     );
-    if (!current || (current.status !== "open" && !updatingLockedRoster)) {
+    if (
+      !current ||
+      (current.status !== "open" && !updatingLockedRoster) ||
+      (current.status === "open" && !current.availabilityClosed)
+    ) {
       setNotice({
         tone: "warning",
-        text: "Open availability before publishing a roster.",
+        text: "Close requests before publishing the roster.",
       });
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      );
       return;
     }
     const assignments = current.shifts.reduce(
@@ -569,6 +570,11 @@ export default function Home() {
       rosterPublished: true,
       status: "locked",
       managerEditMode: false,
+      lastChangeNote: updatingLockedRoster ? event.lastChangeNote : undefined,
+      shifts: event.shifts.map((shift) => ({
+        ...shift,
+        publishedAssignments: [...shift.assignments],
+      })),
     }));
     setNotice({
       tone: "success",
@@ -583,12 +589,43 @@ export default function Home() {
       ...event,
       managerEditMode: true,
       lastChangeNote: reason,
+      shifts: event.shifts.map((shift) => ({
+        ...shift,
+        assignments: [...shift.publishedAssignments],
+      })),
     }));
     setNotice({
       tone: "warning",
       text: "Manager change mode is active. Review assignments, then publish the updated roster.",
     });
     changeScreen("requests");
+  }
+  function closeAvailability() {
+    if (!current || current.status !== "open" || current.availabilityClosed) return;
+    updateCurrent((event) => ({ ...event, availabilityClosed: true }));
+    setNotice({
+      tone: "success",
+      text: "Requests closed in this local preview. Staff can still view their existing requests.",
+    });
+  }
+  function reopenAvailability() {
+    if (!current || current.status !== "open" || !current.availabilityClosed) return;
+    updateCurrent((event) => ({ ...event, availabilityClosed: false }));
+    setNotice({ tone: "success", text: "Availability reopened in this local preview." });
+  }
+  function discardManagerChange() {
+    if (!current?.managerEditMode) return;
+    updateCurrent((event) => ({
+      ...event,
+      managerEditMode: false,
+      lastChangeNote: undefined,
+      shifts: event.shifts.map((shift) => ({
+        ...shift,
+        assignments: [...shift.publishedAssignments],
+      })),
+    }));
+    setNotice({ tone: "success", text: "Draft roster changes discarded." });
+    changeScreen("roster");
   }
 
   return (
@@ -610,7 +647,8 @@ export default function Home() {
           nextOutcome={nextOutcome}
           setNextOutcome={setNextOutcome}
           reset={() => {
-            localStorage.removeItem(storageKey);
+            localStorage.removeItem(prototypeStorageKey);
+            localStorage.removeItem(legacyStorageKey);
             setEvents([]);
             setCurrentId(null);
             setDeleted(null);
@@ -699,6 +737,7 @@ export default function Home() {
           preview={() => changeScreen("staff-list")}
           requests={() => changeScreen("requests")}
           roster={() => changeScreen("roster")}
+          reopen={reopenAvailability}
           remove={() => deleteEvent(current)}
           back={() => changeScreen("events")}
         />
@@ -725,6 +764,8 @@ export default function Home() {
           toggle={toggleAssignment}
           roster={() => changeScreen("roster")}
           back={() => changeScreen("review")}
+          discard={discardManagerChange}
+          closeAvailability={closeAvailability}
         />
       )}
       {screen === "roster" && current && (
@@ -735,6 +776,7 @@ export default function Home() {
           eventPage={() => changeScreen("review")}
           staff={() => changeScreen("my-shifts")}
           beginChange={beginManagerChange}
+          discardChange={discardManagerChange}
         />
       )}
       {screen === "my-shifts" && (
@@ -910,7 +952,7 @@ function AppNav({
         onClick={openEvents}
       >
         <span className="nav-icon" aria-hidden="true">◇</span>
-        <span>Events</span>
+        <span>{role === "manager" ? "Overview" : "Events"}</span>
       </button>
       {role === "manager" ? (
         <>
@@ -1065,11 +1107,42 @@ function Events({
   loadExample: () => void;
   open: (id: string) => void;
 }) {
+  const orderedEvents = [...events].sort((a, b) => a.date.localeCompare(b.date));
+  const totalRequests = events.reduce(
+    (sum, event) => sum + event.shifts.reduce((eventSum, shift) => eventSum + shift.requests.length, 0),
+    0,
+  );
+  const totalAssigned = events.reduce(
+    (sum, event) => sum + event.shifts.reduce(
+      (eventSum, shift) => eventSum + (event.rosterPublished
+        ? visibleAssignments(event, shift).length
+        : shift.assignments.length),
+      0,
+    ),
+    0,
+  );
+  const totalPlaces = events.reduce(
+    (sum, event) => sum + event.shifts.reduce((eventSum, shift) => eventSum + shift.places, 0),
+    0,
+  );
+  const attention = orderedEvents.flatMap((event) =>
+    !event.availabilityClosed && !event.rosterPublished
+      ? []
+      : event.shifts.flatMap((shift) => {
+      const decisionCount = event.rosterPublished
+        ? Math.max(0, shift.places - visibleAssignments(event, shift).length)
+        : Math.max(0, shift.places - shift.assignments.length);
+      return decisionCount
+        ? [{ event, shift, decisionCount }]
+        : [];
+    }),
+  );
   return (
     <section className="workspace" aria-labelledby="events-title">
         <PageHeading
-          title="Events"
-          copy="Create and manage event shifts."
+          id="events-title"
+          title="Overview"
+          copy="Events, staffing decisions and published rosters."
           action={
             events.length ? (
               <button
@@ -1087,20 +1160,60 @@ function Events({
             Loading events…
           </div>
         ) : events.length ? (
-          <div className="event-list">
-            {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((event) => {
+          <>
+            <div className="overview-metrics" aria-label="Roster overview">
+              <article>
+                <span>Events</span>
+                <strong>{events.length}</strong>
+                <small>{events.filter((event) => event.status === "open" && !event.availabilityClosed).length} collecting availability</small>
+              </article>
+              <article>
+                <span>Requests</span>
+                <strong>{totalRequests}</strong>
+                <small>Across all upcoming shifts</small>
+              </article>
+              <article className={totalAssigned < totalPlaces ? "needs-attention" : ""}>
+                <span>Coverage</span>
+                <strong>{totalAssigned}/{totalPlaces}</strong>
+                <small>{Math.max(0, totalPlaces - totalAssigned)} places still to decide</small>
+              </article>
+            </div>
+            <div className="overview-layout">
+              <div>
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">Event operations</span>
+                    <h2>Upcoming events</h2>
+                  </div>
+                </div>
+                <div className="event-list">
+            {orderedEvents.map((event) => {
               const places = event.shifts.reduce((total, shift) => total + shift.places, 0);
               const requests = event.shifts.reduce((total, shift) => total + shift.requests.length, 0);
-              const assigned = event.shifts.reduce((total, shift) => total + shift.assignments.length, 0);
+              const assigned = event.shifts.reduce(
+                (total, shift) => total + (event.rosterPublished
+                  ? visibleAssignments(event, shift).length
+                  : shift.assignments.length),
+                0,
+              );
+              const phase = event.rosterPublished || event.availabilityClosed
+                ? 3
+                : event.status === "open"
+                  ? 2
+                  : 1;
               return (
               <article className="event-row event-row-manager" key={event.id}>
                 <div>
                   <Status
                     value={
-                      event.rosterPublished
+                      event.managerEditMode
+                        ? "Change in progress"
+                        : event.rosterPublished
                         ? "Roster published"
                         : event.status === "open"
-                          ? "Availability open"
+                          ? event.availabilityClosed
+                            ? "Finalising roster"
+                            : "Availability open"
                           : "Draft"
                     }
                   />
@@ -1108,6 +1221,11 @@ function Events({
                   <p>
                     {formatEventDates(event)} · {event.location}
                   </p>
+                  <div className="event-phase" aria-label={`Step ${phase} of 3`}>
+                    <span className={phase >= 1 ? "complete" : ""}>Plan</span>
+                    <span className={phase >= 2 ? "complete" : ""}>Requests</span>
+                    <span className={phase >= 3 ? "complete" : ""}>Roster</span>
+                  </div>
                 </div>
                 <div className="event-metrics" aria-label="Event staffing summary">
                   <span><strong>{requests}</strong> requests</span>
@@ -1118,11 +1236,53 @@ function Events({
                   type="button"
                   onClick={() => open(event.id)}
                 >
-                  Manage event
+                  {event.managerEditMode
+                    ? "Continue correction"
+                    : event.rosterPublished
+                    ? "View roster"
+                    : event.availabilityClosed
+                      ? "Continue roster"
+                      : event.status === "open"
+                        ? "Review event"
+                        : "Continue planning"}
                 </button>
               </article>
             );})}
-          </div>
+                </div>
+              </div>
+              <aside className="attention-panel" aria-labelledby="attention-title">
+                <div className="section-heading">
+                  <div>
+                    <span className="eyebrow">Decision queue</span>
+                    <h2 id="attention-title">Needs attention</h2>
+                  </div>
+                  <Status value={attention.length ? `${attention.length} open` : "Clear"} />
+                </div>
+                {attention.length ? (
+                  <ul>
+                    {attention.slice(0, 5).map(({ event, shift, decisionCount }) => (
+                      <li key={`${event.id}-${shift.id}`}>
+                        <button type="button" onClick={() => open(event.id)}>
+                          <strong>{event.name}</strong>
+                          <span>{formatDate(shift.date)} · {shift.start}–{shift.finish}</span>
+                          <small>{decisionCount} {decisionCount === 1 ? "place" : "places"} still to decide</small>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="small-empty">No final roster decisions need attention.</div>
+                )}
+                <div className="delivery-summary">
+                  <span aria-hidden="true">✉</span>
+                  <div>
+                    <strong>Email delivery</strong>
+                    <small>Not connected in this prototype</small>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </>
         ) : (
           <div className="empty-state">
             <div className="empty-mark" aria-hidden="true">
@@ -1161,6 +1321,9 @@ function CreateEvent({
   save: (event: FormEvent<HTMLFormElement>) => void;
   cancel: () => void;
 }) {
+  const scheduleLocked = editing && draft.shifts.some(
+    (shift) => shift.requests.length > 0 || shift.assignments.length > 0,
+  );
   function updateShift(
     id: string,
     field: keyof Pick<Shift, "date" | "start" | "finish" | "places">,
@@ -1173,6 +1336,21 @@ function CreateEvent({
           ? { ...shift, [field]: field === "places" ? Number(value) : value }
           : shift,
       ),
+    }));
+  }
+  function duplicateShift(shift: Shift) {
+    setDraft((current) => ({
+      ...current,
+      shifts: [
+        ...current.shifts,
+        {
+          ...shift,
+          id: crypto.randomUUID(),
+          requests: [],
+          assignments: [],
+          publishedAssignments: [],
+        },
+      ],
     }));
   }
   return (
@@ -1201,6 +1379,7 @@ function CreateEvent({
                 First day
                 <input
                   type="date"
+                  disabled={scheduleLocked}
                   value={draft.date}
                   onChange={(e) => {
                     const nextDate = e.target.value;
@@ -1231,7 +1410,10 @@ function CreateEvent({
                 <input
                   type="date"
                   min={draft.date}
+                  disabled={scheduleLocked}
                   value={draft.endDate}
+                  aria-invalid={Boolean(draft.endDate && draft.endDate < draft.date)}
+                  aria-describedby={draft.endDate && draft.endDate < draft.date ? "event-date-error" : undefined}
                   onChange={(e) =>
                     setDraft((current) => ({
                       ...current,
@@ -1240,6 +1422,9 @@ function CreateEvent({
                   }
                   required
                 />
+                {draft.endDate && draft.endDate < draft.date && (
+                  <span className="field-error" id="event-date-error">Last day must be on or after the first day.</span>
+                )}
               </label>
               <label>
                 Location
@@ -1258,6 +1443,14 @@ function CreateEvent({
           </fieldset>
           <fieldset className="form-section">
             <legend>Shifts</legend>
+            {scheduleLocked && (
+              <div className="inline-state warning" role="status">
+                <strong>Shift schedule protected</strong>
+                <span>
+                  This event has requests or assignments. Names and location can still be edited, but dates and times cannot move people silently.
+                </span>
+              </div>
+            )}
             {draft.shifts.map((shift, index) => {
               const minimumPlaces = Math.max(
                 1,
@@ -1265,6 +1458,10 @@ function CreateEvent({
                 shift.assignments.length,
               );
               const capacityInvalid = shift.places < minimumPlaces;
+              const dayInvalid = Boolean(
+                shift.date && (shift.date < draft.date || shift.date > draft.endDate),
+              );
+              const timeInvalid = Boolean(shift.finish && shift.finish <= shift.start);
               return (
                 <div className="shift-editor" key={shift.id}>
                   <strong>Shift {index + 1}</strong>
@@ -1276,6 +1473,9 @@ function CreateEvent({
                         min={draft.date}
                         max={draft.endDate || draft.date}
                         value={shift.date}
+                        aria-invalid={dayInvalid}
+                        aria-describedby={dayInvalid ? `${shift.id}-day-error` : undefined}
+                        disabled={scheduleLocked && (shift.requests.length > 0 || shift.assignments.length > 0)}
                         onChange={(e) =>
                           updateShift(shift.id, "date", e.target.value)
                         }
@@ -1287,6 +1487,7 @@ function CreateEvent({
                       <input
                         type="time"
                         value={shift.start}
+                        disabled={scheduleLocked && (shift.requests.length > 0 || shift.assignments.length > 0)}
                         onChange={(e) =>
                           updateShift(shift.id, "start", e.target.value)
                         }
@@ -1298,6 +1499,9 @@ function CreateEvent({
                       <input
                         type="time"
                         value={shift.finish}
+                        aria-invalid={timeInvalid}
+                        aria-describedby={timeInvalid ? `${shift.id}-time-error` : undefined}
+                        disabled={scheduleLocked && (shift.requests.length > 0 || shift.assignments.length > 0)}
                         onChange={(e) =>
                           updateShift(shift.id, "finish", e.target.value)
                         }
@@ -1333,6 +1537,23 @@ function CreateEvent({
                       requests or assignments.
                     </span>
                   )}
+                  {dayInvalid && (
+                    <span className="field-error" id={`${shift.id}-day-error`}>
+                      Choose a day inside the event date range.
+                    </span>
+                  )}
+                  {timeInvalid && (
+                    <span className="field-error" id={`${shift.id}-time-error`}>
+                      Finish time must be after the start time.
+                    </span>
+                  )}
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => duplicateShift(shift)}
+                  >
+                    Duplicate shift
+                  </button>
                   {draft.shifts.length > 1 &&
                     shift.requests.length === 0 &&
                     shift.assignments.length === 0 && (
@@ -1398,6 +1619,7 @@ function ManagerEvent({
   preview,
   requests,
   roster,
+  reopen,
   remove,
   back,
 }: {
@@ -1407,6 +1629,7 @@ function ManagerEvent({
   preview: () => void;
   requests: () => void;
   roster: () => void;
+  reopen: () => void;
   remove: () => void;
   back: () => void;
 }) {
@@ -1415,9 +1638,18 @@ function ManagerEvent({
     (sum, shift) => sum + shift.requests.length,
     0,
   );
+  const totalPlaces = event.shifts.reduce((sum, shift) => sum + shift.places, 0);
+  const totalAssigned = event.shifts.reduce(
+    (sum, shift) =>
+      sum + (event.rosterPublished
+        ? visibleAssignments(event, shift).length
+        : shift.assignments.length),
+    0,
+  );
+  const eventDays = [...new Set(event.shifts.map((shift) => shift.date))].sort();
   return (
     <section className="workspace">
-        <Back onClick={back}>Events</Back>
+        <Back onClick={back}>Overview</Back>
         <PageHeading
           title={event.name}
           copy={`${formatEventDates(event)} · ${event.location}`}
@@ -1426,7 +1658,9 @@ function ManagerEvent({
               <Status
                 value={
                   event.status === "open"
-                    ? "Availability open"
+                    ? event.availabilityClosed
+                      ? "Finalising roster"
+                      : "Availability open"
                     : event.status === "locked"
                       ? "Locked"
                       : "Draft"
@@ -1438,6 +1672,23 @@ function ManagerEvent({
             </div>
           }
         />
+        <div className="event-command-grid" aria-label="Event staffing status">
+          <article>
+            <span>Days</span>
+            <strong>{eventDays.length}</strong>
+            <small>{event.shifts.length} scheduled {event.shifts.length === 1 ? "shift" : "shifts"}</small>
+          </article>
+          <article>
+            <span>Requests</span>
+            <strong>{totalRequests}</strong>
+            <small>{event.status === "open" && !event.availabilityClosed ? "Availability is open" : "Requests are closed"}</small>
+          </article>
+          <article className={totalAssigned < totalPlaces ? "needs-attention" : ""}>
+            <span>Roster coverage</span>
+            <strong>{totalAssigned}/{totalPlaces}</strong>
+            <small>{Math.max(0, totalPlaces - totalAssigned)} places unfilled</small>
+          </article>
+        </div>
         <section className="panel">
             <div className="panel-heading">
               <div>
@@ -1461,7 +1712,7 @@ function ManagerEvent({
                   type="button"
                   onClick={requests}
                 >
-                  Requests ({totalRequests})
+                  {event.availabilityClosed ? "Continue roster" : `Requests (${totalRequests})`}
                 </button>
               )}
               {event.status === "locked" && (
@@ -1474,10 +1725,28 @@ function ManagerEvent({
                 </button>
               )}
             </div>
-            {event.shifts.map((shift) => (
-              <ShiftSummary shift={shift} key={shift.id} />
-            ))}
+            <div className="manager-day-groups">
+              {eventDays.map((day) => (
+                <section className="manager-day" key={day}>
+                  <h3>{formatDate(day)}</h3>
+                  {event.shifts
+                    .filter((shift) => shift.date === day)
+                    .sort((a, b) => a.start.localeCompare(b.start))
+                    .map((shift) => (
+                      <ShiftSummary shift={shift} key={shift.id} />
+                    ))}
+                </section>
+              ))}
+            </div>
         </section>
+        {event.status === "open" && event.availabilityClosed && (
+          <div className="event-secondary-action">
+            <span>Staff requests are closed while you make final assignments.</span>
+            <button className="text-button" type="button" onClick={reopen}>
+              Reopen availability
+            </button>
+          </div>
+        )}
         {confirmOpen && (
           <ConfirmationDialog
             eyebrow="Open availability"
@@ -1531,14 +1800,57 @@ function StaffEvents({
   events: StaffEvent[];
   open: (id: string) => void;
 }) {
+  const openPlaces = events.reduce(
+    (sum, event) => sum + (event.status === "open" && !event.availabilityClosed
+      ? event.shifts.reduce(
+          (eventSum, shift) => eventSum + Math.max(0, shift.places - shift.requests.length),
+          0,
+        )
+      : 0),
+    0,
+  );
+  const requested = events.reduce(
+    (sum, event) => sum + (!event.rosterPublished
+      ? event.shifts.filter((shift) => shift.requests.includes(previewStaffId)).length
+      : 0),
+    0,
+  );
+  const confirmed = events.reduce(
+    (sum, event) => sum + event.shifts.filter((shift) => visibleAssignments(event, shift).includes(previewStaffId)).length,
+    0,
+  );
   return (
     <section className="workspace staff-workspace">
-      <PageHeading title="Events" copy="Available shifts and your requests." />
+      <PageHeading title="Your work" copy="Upcoming events, requests and confirmed shifts." />
       {events.length ? (
-        <div className="event-list">
+        <>
+          <div className="overview-metrics staff-overview" aria-label="Your shift overview">
+            <article>
+              <span>Places open</span>
+              <strong>{openPlaces}</strong>
+              <small>Across upcoming events</small>
+            </article>
+            <article>
+              <span>Pending</span>
+              <strong>{Math.max(0, requested - confirmed)}</strong>
+              <small>Waiting for manager confirmation</small>
+            </article>
+            <article className="confirmed-metric">
+              <span>Confirmed</span>
+              <strong>{confirmed}</strong>
+              <small>Published roster assignments</small>
+            </article>
+          </div>
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Event availability</span>
+              <h2>Upcoming events</h2>
+            </div>
+          </div>
+          <div className="event-list">
           {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((event) => {
             const places =
-              event.status === "open"
+              event.status === "open" && !event.availabilityClosed
                 ? event.shifts.reduce(
                     (sum, shift) =>
                       sum + Math.max(0, shift.places - shift.requests.length),
@@ -1546,10 +1858,10 @@ function StaffEvents({
                   )
                 : 0;
             const mine = event.shifts.filter((shift) =>
-              shift.requests.includes(previewStaff),
+              shift.requests.includes(previewStaffId),
             );
             const confirmed = mine.filter((shift) =>
-              shift.assignments.includes(previewStaff),
+              visibleAssignments(event, shift).includes(previewStaffId),
             ).length;
             return (
               <article className="event-row" key={event.id}>
@@ -1558,7 +1870,7 @@ function StaffEvents({
                     value={
                       event.rosterPublished
                         ? "Roster published"
-                        : event.status === "open"
+                        : event.status === "open" && !event.availabilityClosed
                         ? "Availability open"
                         : "Requests closed"
                     }
@@ -1588,7 +1900,7 @@ function StaffEvents({
                           <span>
                             {event.rosterPublished
                               ? "Roster published"
-                              : event.status !== "open"
+                              : event.status !== "open" || event.availabilityClosed
                                 ? "Closed"
                                 : remaining
                                   ? `${remaining} open`
@@ -1613,7 +1925,8 @@ function StaffEvents({
               </article>
             );
           })}
-        </div>
+          </div>
+        </>
       ) : (
         <div className="empty-state compact">
           <h2>No events available</h2>
@@ -1640,6 +1953,11 @@ function StaffEventView({
   events: () => void;
 }) {
   const [releaseTarget, setReleaseTarget] = useState<Shift | null>(null);
+  const myRequests = event.shifts.filter((shift) => shift.requests.includes(previewStaffId)).length;
+  const myConfirmed = event.shifts.filter((shift) => visibleAssignments(event, shift).includes(previewStaffId)).length;
+  const openPlaces = event.status === "open" && !event.availabilityClosed
+    ? event.shifts.reduce((sum, shift) => sum + Math.max(0, shift.places - shift.requests.length), 0)
+    : 0;
   return (
     <section className="workspace staff-workspace">
         <Back onClick={events}>Events</Back>
@@ -1647,12 +1965,28 @@ function StaffEventView({
           title={event.name}
           copy={`${formatEventDates(event)} · ${event.location}`}
         />
+        <div className="staff-event-summary" aria-label="Your event status">
+          <div>
+            <span>Your status</span>
+            <strong>{event.rosterPublished
+              ? myConfirmed
+                ? `${myConfirmed} confirmed ${myConfirmed === 1 ? "shift" : "shifts"}`
+                : "Not assigned"
+              : myRequests
+                ? `${myRequests} pending ${myRequests === 1 ? "request" : "requests"}`
+                : "No requests yet"}</strong>
+          </div>
+          <div>
+            <span>Availability</span>
+            <strong>{event.status === "open" && !event.availabilityClosed ? `${openPlaces} places open` : "Requests closed"}</strong>
+          </div>
+        </div>
         <div className="shift-list">
           {event.shifts.map((shift) => {
-            const mine = shift.requests.includes(previewStaff);
-            const assigned = shift.assignments.includes(previewStaff);
+            const mine = shift.requests.includes(previewStaffId);
+            const assigned = visibleAssignments(event, shift).includes(previewStaffId);
             const remaining = Math.max(0, shift.places - shift.requests.length);
-            const locked = event.status !== "open";
+            const locked = event.status !== "open" || event.availabilityClosed;
             const confirmed = event.rosterPublished && assigned;
             const notAssigned = event.rosterPublished && mine && !assigned;
             return (
@@ -1722,8 +2056,14 @@ function StaffEventView({
           })}
         </div>
         <p className="authority-note">
-          A shift request holds availability. The manager confirms the final roster.
+          Prototype behaviour: a request temporarily uses one displayed place. The manager still confirms the final roster.
         </p>
+        {(event.status !== "open" || event.availabilityClosed) && (
+          <div className="inline-state info">
+            <strong>Has your availability changed?</strong>
+            <span>Requests are closed. Contact the manager directly; in-app contact is not connected in this prototype.</span>
+          </div>
+        )}
         {releaseTarget && (
           <ConfirmationDialog
             eyebrow="Release shift request"
@@ -1747,11 +2087,15 @@ function Requests({
   toggle,
   roster,
   back,
+  discard,
+  closeAvailability,
 }: {
   event: StaffEvent;
   toggle: (shiftId: string, name: string) => void;
   roster: () => void;
   back: () => void;
+  discard: () => void;
+  closeAvailability: () => void;
 }) {
   const totalSelected = event.shifts.reduce(
     (sum, shift) => sum + shift.assignments.length,
@@ -1768,12 +2112,25 @@ function Requests({
           title="Reservation requests"
           copy={`${event.name} · ${formatEventDates(event)} · ${event.location}`}
         />
+        {!event.availabilityClosed && !event.managerEditMode && (
+          <div className="inline-state info">
+            <div>
+              <strong>Availability is still open</strong>
+              <span>Review the response pattern, then close requests before making final assignments.</span>
+            </div>
+          </div>
+        )}
         {event.managerEditMode && (
           <div className="inline-state warning">
-            <strong>Manager change mode</strong>
-            <span>
-              {event.lastChangeNote}. Update assignments, then publish the revised roster.
-            </span>
+            <div>
+              <strong>Drafting a roster correction</strong>
+              <span>
+                Staff still see the last published roster. Reason: {event.lastChangeNote}.
+              </span>
+            </div>
+            <button className="button secondary" type="button" onClick={discard}>
+              Discard changes
+            </button>
           </div>
         )}
         <div className="request-groups">
@@ -1801,13 +2158,14 @@ function Requests({
                   {shift.requests.map((name) => (
                     <label className="person-row" key={name}>
                       <span>
-                        <strong>{name}</strong>
+                        <strong>{memberName(name)}</strong>
                         <small>Requested · awaiting decision</small>
                       </span>
                       <input
                         type="checkbox"
                         checked={shift.assignments.includes(name)}
                         disabled={
+                          (!event.availabilityClosed && !event.managerEditMode) ||
                           (event.status === "locked" && !event.managerEditMode) ||
                           (!shift.assignments.includes(name) &&
                             shift.assignments.length >= shift.places)
@@ -1821,14 +2179,54 @@ function Requests({
               ) : (
                 <div className="small-empty">No requests yet.</div>
               )}
+              {event.managerEditMode && (
+                <details className="substitute-picker">
+                  <summary>Choose a fictional substitute</summary>
+                  <p>
+                    Prototype assumption: a manager may select another invited team member for an urgent correction.
+                  </p>
+                  <div className="person-list">
+                    {fictionalTeam
+                      .filter((memberId) => !shift.requests.includes(memberId))
+                      .map((memberId) => (
+                        <label className="person-row" key={memberId}>
+                          <span>
+                            <strong>{memberName(memberId)}</strong>
+                            <small>Invited fictional team member · did not request this shift</small>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={shift.assignments.includes(memberId)}
+                            disabled={
+                              !shift.assignments.includes(memberId) &&
+                              shift.assignments.length >= shift.places
+                            }
+                            onChange={() => toggle(shift.id, memberId)}
+                          />
+                          <span className="checkbox-ui" aria-hidden="true" />
+                        </label>
+                      ))}
+                  </div>
+                </details>
+              )}
             </section>
           ))}
         </div>
         <div className="sticky-action">
-          <button className="button primary" type="button" onClick={roster}>
-            Review roster
+          <button
+            className="button primary"
+            type="button"
+            onClick={event.availabilityClosed || event.managerEditMode ? roster : closeAvailability}
+          >
+            {event.availabilityClosed || event.managerEditMode
+              ? "Review roster"
+              : "Close requests and assign"}
           </button>
-          <span>{totalSelected} of {totalPlaces} places assigned</span>
+          <span>
+            {event.availabilityClosed || event.managerEditMode
+              ? `${totalSelected} of ${totalPlaces} places assigned`
+              : `${event.shifts.reduce((sum, shift) => sum + shift.requests.length, 0)} requests received`}
+          </span>
         </div>
     </section>
   );
@@ -1841,6 +2239,7 @@ function Roster({
   eventPage,
   staff,
   beginChange,
+  discardChange,
 }: {
   event: StaffEvent;
   publish: () => void;
@@ -1848,12 +2247,26 @@ function Roster({
   eventPage: () => void;
   staff: () => void;
   beginChange: (reason: string) => void;
+  discardChange: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [changeOpen, setChangeOpen] = useState(false);
+  const changeButtonRef = useRef<HTMLButtonElement>(null);
   const incomplete = event.shifts.some(
     (shift) => shift.assignments.length < shift.places,
   );
+  const rosterChanges = event.shifts.flatMap((shift) => {
+    const added = shift.assignments.filter(
+      (memberId) => !shift.publishedAssignments.includes(memberId),
+    );
+    const removed = shift.publishedAssignments.filter(
+      (memberId) => !shift.assignments.includes(memberId),
+    );
+    return added.length || removed.length ? [{ shift, added, removed }] : [];
+  });
+  const affectedPeople = new Set(
+    rosterChanges.flatMap((change) => [...change.added, ...change.removed]),
+  ).size;
   return (
     <section className="workspace narrow">
         <Back onClick={event.rosterPublished ? eventPage : back}>
@@ -1863,6 +2276,31 @@ function Roster({
           title="Roster"
           copy={`${event.name} · ${formatEventDates(event)}`}
         />
+        {event.managerEditMode && (
+          <section className="change-review" aria-labelledby="change-review-title">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">Before republishing</span>
+                <h2 id="change-review-title">Roster changes</h2>
+              </div>
+              <Status value={rosterChanges.length ? `${affectedPeople} affected` : "No changes"} />
+            </div>
+            {rosterChanges.length ? (
+              <ul>
+                {rosterChanges.map(({ shift, added, removed }) => (
+                  <li key={shift.id}>
+                    <strong>{formatDate(shift.date)} · {shift.start}–{shift.finish}</strong>
+                    {removed.length > 0 && <span>Removed: {removed.map(memberName).join(", ")}</span>}
+                    {added.length > 0 && <span>Added: {added.map(memberName).join(", ")}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No assignment changes yet. Staff still see the published roster.</p>
+            )}
+            <small>Reason: {event.lastChangeNote}</small>
+          </section>
+        )}
         {incomplete && !event.rosterPublished && (
           <div className="inline-state warning">
             <strong>Roster has open places</strong>
@@ -1892,7 +2330,7 @@ function Roster({
                   <ul className="assigned-list">
                     {shift.assignments.map((name) => (
                       <li key={name}>
-                        {name}
+                        {memberName(name)}
                         <Status value="Confirmed" />
                       </li>
                     ))}
@@ -1914,6 +2352,7 @@ function Roster({
               </button>
             </span>
             <button
+              ref={changeButtonRef}
               className="button secondary"
               type="button"
               onClick={() => setChangeOpen(true)}
@@ -1923,10 +2362,18 @@ function Roster({
           </div>
         ) : (
           <div className="sticky-action">
+            {event.managerEditMode && (
+              <button className="button secondary" type="button" onClick={discardChange}>
+                Discard changes
+              </button>
+            )}
             <button
               className="button primary"
               type="button"
-              disabled={!event.shifts.some((shift) => shift.assignments.length)}
+              disabled={
+                !event.shifts.some((shift) => shift.assignments.length) ||
+                (event.managerEditMode && rosterChanges.length === 0)
+              }
               onClick={() => setConfirmOpen(true)}
             >
               {event.managerEditMode ? "Publish updated roster" : "Publish local roster"}
@@ -1938,10 +2385,12 @@ function Roster({
           <ConfirmationDialog
             eyebrow={event.managerEditMode ? "Publish roster update" : "Publish roster"}
             title={event.name}
-            copy={`${event.shifts.reduce((total, shift) => total + shift.assignments.length, 0)} assigned · ${event.shifts.reduce((total, shift) => total + Math.max(0, shift.places - shift.assignments.length), 0)} open places`}
+            copy={event.managerEditMode
+              ? `${rosterChanges.length} changed ${rosterChanges.length === 1 ? "shift" : "shifts"} · ${affectedPeople} affected ${affectedPeople === 1 ? "person" : "people"}`
+              : `${event.shifts.reduce((total, shift) => total + shift.assignments.length, 0)} assigned · ${event.shifts.reduce((total, shift) => total + Math.max(0, shift.places - shift.assignments.length), 0)} open places`}
             note={event.managerEditMode
-              ? "This records the revised local roster. No affected staff will be notified."
-              : "This locks the roster in the local prototype. No messages will be sent."}
+              ? `Reason: ${event.lastChangeNote}. This records the revised local roster; no affected staff will be notified.`
+              : "The local prototype closes staff changes immediately. Automatic cutoff timing and notifications are not connected."}
             cancelLabel="Keep editing"
             confirmLabel="Publish roster"
             onCancel={() => setConfirmOpen(false)}
@@ -1954,7 +2403,10 @@ function Roster({
         {changeOpen && (
           <ManagerChangeDialog
             event={event}
-            onCancel={() => setChangeOpen(false)}
+            onCancel={() => {
+              setChangeOpen(false);
+              requestAnimationFrame(() => changeButtonRef.current?.focus());
+            }}
             onConfirm={(reason) => {
               setChangeOpen(false);
               beginChange(reason);
@@ -1971,10 +2423,26 @@ function timeToMinutes(value: string) {
 }
 
 function RosterTimeline({ event }: { event: StaffEvent }) {
-  const startMinutes = 6 * 60;
-  const endMinutes = 22 * 60;
+  const allStartMinutes = event.shifts.map((shift) => timeToMinutes(shift.start));
+  const allFinishMinutes = event.shifts.map((shift) => timeToMinutes(shift.finish));
+  const startHour = Math.max(0, Math.floor(Math.min(...allStartMinutes) / 60));
+  const endHour = Math.min(
+    24,
+    Math.max(startHour + 1, Math.ceil(Math.max(...allFinishMinutes) / 60)),
+  );
+  const startMinutes = startHour * 60;
+  const endMinutes = endHour * 60;
   const duration = endMinutes - startMinutes;
   const days = [...new Set(event.shifts.map((shift) => shift.date))].sort();
+  const axisHours = Array.from(
+    { length: Math.ceil((endHour - startHour) / 3) + 1 },
+    (_, index) => Math.min(endHour, startHour + index * 3),
+  ).filter((hour, index, values) => index === 0 || hour !== values[index - 1]);
+  if (axisHours.at(-1) !== endHour) axisHours.push(endHour);
+  const publishedCount = event.shifts.reduce(
+    (sum, shift) => sum + visibleAssignments(event, shift).length,
+    0,
+  );
   return (
     <section className="timeline-card" aria-labelledby="timeline-title">
       <div className="timeline-heading">
@@ -1982,13 +2450,21 @@ function RosterTimeline({ event }: { event: StaffEvent }) {
           <span className="eyebrow">Confirmed coverage</span>
           <h2 id="timeline-title">Event roster timeline</h2>
         </div>
-        <span>{event.shifts.reduce((sum, shift) => sum + shift.assignments.length, 0)} assignments</span>
+        <span>{publishedCount} assignments</span>
       </div>
       <div className="timeline-scroll" tabIndex={0} aria-label="Scrollable roster timeline">
         <div className="timeline-canvas">
           <div className="timeline-axis" aria-hidden="true">
-            {[6, 9, 12, 15, 18, 21].map((hour) => (
-              <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
+            {axisHours.map((hour) => (
+              <span
+                className={hour === startHour ? "first" : hour === endHour ? "last" : undefined}
+                key={hour}
+                style={{
+                  "--timeline-tick": `${((hour - startHour) / (endHour - startHour)) * 100}%`,
+                } as React.CSSProperties}
+              >
+                {String(hour).padStart(2, "0")}:00
+              </span>
             ))}
           </div>
           {days.map((day) => (
@@ -1998,29 +2474,34 @@ function RosterTimeline({ event }: { event: StaffEvent }) {
                 .filter((shift) => shift.date === day)
                 .sort((a, b) => a.start.localeCompare(b.start))
                 .map((shift) => {
+                  const publishedAssignments = visibleAssignments(event, shift);
                   const start = Math.max(0, timeToMinutes(shift.start) - startMinutes);
                   const width = Math.max(
-                    45,
+                    0,
                     Math.min(duration - start, timeToMinutes(shift.finish) - timeToMinutes(shift.start)),
                   );
                   return (
                     <div className="timeline-row" key={shift.id}>
                       <div className="timeline-meta">
                         <strong>{shift.start}–{shift.finish}</strong>
-                        <span>{shift.assignments.length}/{shift.places} staffed</span>
+                        <span>{publishedAssignments.length}/{shift.places} staffed</span>
                       </div>
                       <div className="timeline-track">
                         <div
-                          className={`timeline-bar ${shift.assignments.length < shift.places ? "has-gap" : ""}`}
+                          className={`timeline-bar ${publishedAssignments.length < shift.places ? "has-gap" : ""}`}
                           style={{
                             "--timeline-start": `${(start / duration) * 100}%`,
                             "--timeline-width": `${(width / duration) * 100}%`,
                           } as React.CSSProperties}
-                          aria-label={`${shift.start} to ${shift.finish}: ${shift.assignments.length} of ${shift.places} staffed`}
+                          aria-label={`${shift.start} to ${shift.finish}: ${publishedAssignments.length} of ${shift.places} staffed`}
                         >
-                          <strong>{shift.assignments.length ? shift.assignments.join(", ") : "Unfilled"}</strong>
-                          <span>{shift.assignments.length < shift.places ? `${shift.places - shift.assignments.length} open` : "Covered"}</span>
+                          <strong>{publishedAssignments.length ? publishedAssignments.map(memberName).join(", ") : "Unfilled"}</strong>
+                          <span>{publishedAssignments.length < shift.places ? `${shift.places - publishedAssignments.length} open` : "Covered"}</span>
                         </div>
+                      </div>
+                      <div className="timeline-mobile-copy">
+                        <strong>{publishedAssignments.length ? publishedAssignments.map(memberName).join(", ") : "No one assigned"}</strong>
+                        <span>{publishedAssignments.length < shift.places ? `${shift.places - publishedAssignments.length} open ${shift.places - publishedAssignments.length === 1 ? "place" : "places"}` : "Coverage complete"}</span>
                       </div>
                     </div>
                   );
@@ -2061,6 +2542,12 @@ function ManagerChangeDialog({
       onCancel={(event) => {
         event.preventDefault();
         onCancel();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+        }
       }}
     >
       <div>
@@ -2117,7 +2604,7 @@ function MyShifts({
   const requested = events
     .flatMap((event) =>
       event.shifts
-        .filter((shift) => shift.requests.includes(previewStaff))
+        .filter((shift) => shift.requests.includes(previewStaffId))
         .map((shift) => ({ event, shift })),
     )
     .sort((a, b) =>
@@ -2134,8 +2621,8 @@ function MyShifts({
         {requested.length ? (
           <div className="shift-list my-shift-list">
             {requested.map(({ event, shift }) => {
-              const assigned = shift.assignments.includes(previewStaff);
-              const pending = !event.rosterPublished;
+              const assigned = visibleAssignments(event, shift).includes(previewStaffId);
+              const pending = !event.rosterPublished && event.status === "open" && !event.availabilityClosed;
               return (
                 <article className="staff-shift" key={`${event.id}-${shift.id}`}>
                   <div>
@@ -2143,9 +2630,7 @@ function MyShifts({
                     <p className="shift-time">
                       {formatDate(shift.date)} · {shift.start}–{shift.finish}
                     </p>
-                    <p className="capacity-text">
-                      {formatDate(shift.date)} · {event.location}
-                    </p>
+                    <p className="capacity-text">{event.location}</p>
                   </div>
                   <div className="shift-action">
                     <Status
@@ -2154,7 +2639,9 @@ function MyShifts({
                           ? assigned
                             ? "Confirmed shift"
                             : "Not assigned"
-                          : "Pending approval"
+                          : event.availabilityClosed
+                            ? "Requests closed"
+                            : "Pending approval"
                       }
                     />
                     {pending && (
