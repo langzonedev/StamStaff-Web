@@ -1,194 +1,1528 @@
-'use client';
+"use client";
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-type Mode = 'staff' | 'manager';
+type Shift = {
+  id: string;
+  start: string;
+  finish: string;
+  places: number;
+  requests: string[];
+  assignments: string[];
+};
+type StaffEvent = {
+  id: string;
+  name: string;
+  date: string;
+  location: string;
+  status: "draft" | "open" | "locked";
+  rosterPublished: boolean;
+  shifts: Shift[];
+};
+type Screen =
+  | "events"
+  | "create"
+  | "review"
+  | "staff-list"
+  | "staff"
+  | "requests"
+  | "roster"
+  | "my-shifts";
+type Notice = {
+  tone: "info" | "success" | "warning" | "danger";
+  text: string;
+} | null;
 
-const shifts = [
-  { id: 'setup', label: 'Morning setup', time: '9:00 am – 1:00 pm', note: 'Set up the stall, prep equipment and welcome the first guests.', capacity: 4, claimed: 2 },
-  { id: 'service', label: 'Festival service', time: '1:00 pm – 7:00 pm', note: 'Serve guests, restock and keep the stall running smoothly.', capacity: 4, claimed: 3 },
-];
+const storageKey = "stampstaff.prototype.v2";
+const previewStaff = "Preview staff member";
+const newShift = (id = crypto.randomUUID()): Shift => ({
+  id,
+  start: "09:00",
+  finish: "13:00",
+  places: 4,
+  requests: [],
+  assignments: [],
+});
+const blankEvent = (): StaffEvent => ({
+  id: crypto.randomUUID(),
+  name: "",
+  date: "",
+  location: "",
+  status: "draft",
+  rosterPublished: false,
+  shifts: [newShift()],
+});
+const sampleEvent = (): StaffEvent => ({
+  id: "sample-event",
+  name: "Spring market",
+  date: "2026-10-17",
+  location: "Sample venue",
+  status: "open",
+  rosterPublished: false,
+  shifts: [
+    {
+      id: "sample-morning",
+      start: "09:00",
+      finish: "13:00",
+      places: 3,
+      requests: ["Alex Chen", "Jamie Brooks"],
+      assignments: [],
+    },
+    {
+      id: "sample-afternoon",
+      start: "13:00",
+      finish: "17:00",
+      places: 2,
+      requests: ["Jamie Brooks"],
+      assignments: [],
+    },
+  ],
+});
 
-const claimants = [
-  { id: 'riley', initials: 'RK', name: 'Riley Kim', shift: 'Morning setup', status: 'Provisional' },
-  { id: 'jordan', initials: 'JB', name: 'Jordan Bell', shift: 'Morning setup', status: 'Provisional' },
-  { id: 'sam', initials: 'ST', name: 'Sam Taylor', shift: 'Festival service', status: 'Provisional' },
-  { id: 'casey', initials: 'CA', name: 'Casey Allen', shift: 'Festival service', status: 'Provisional' },
-];
+function formatDate(value: string) {
+  if (!value) return "Date not set";
+  return new Intl.DateTimeFormat("en-AU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
+}
 
 export default function Home() {
-  const [mode, setMode] = useState<Mode>('staff');
-  const [reserved, setReserved] = useState<string[]>([]);
-  const [confirmed, setConfirmed] = useState<string[]>([]);
-  const [message, setMessage] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
-  const [createdEvent, setCreatedEvent] = useState<string | null>(null);
-  const [showStates, setShowStates] = useState(false);
+  const [screen, setScreen] = useState<Screen>("events");
+  const [events, setEvents] = useState<StaffEvent[]>([]);
+  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<StaffEvent>(() => blankEvent());
+  const [ready, setReady] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [deleted, setDeleted] = useState<StaffEvent | null>(null);
+  const [pendingShift, setPendingShift] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [nextOutcome, setNextOutcome] = useState<"conflict" | "failure" | null>(
+    null,
+  );
 
-  function toggleReservation(id: string, label: string) {
-    const isReserved = reserved.includes(id);
-    setReserved((current) => isReserved ? current.filter((shiftId) => shiftId !== id) : [...current, id]);
-    setMessage(isReserved
-      ? `${label} is available again.`
-      : `${label} is provisionally reserved. The manager still confirms the final roster.`);
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) setEvents(JSON.parse(saved) as StaffEvent[]);
+      } catch {
+        setNotice({
+          tone: "warning",
+          text: "Saved prototype data could not be loaded. You can still continue on this page.",
+        });
+      }
+      setOnline(navigator.onLine);
+      setReady(true);
+    });
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(events));
+    } catch {
+      queueMicrotask(() =>
+        setNotice({
+          tone: "danger",
+          text: "Changes could not be saved on this device. Keep this page open and try again.",
+        }),
+      );
+    }
+  }, [events, ready]);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>("h1")?.focus(),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [screen]);
+
+  const current = useMemo(
+    () => events.find((item) => item.id === currentId) ?? events[0] ?? null,
+    [events, currentId],
+  );
+  function changeScreen(next: Screen, eventId?: string) {
+    if (eventId) setCurrentId(eventId);
+    setNotice(null);
+    setScreen(next);
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
-
-  function toggleConfirmation(id: string, name: string) {
-    const isConfirmed = confirmed.includes(id);
-    setConfirmed((current) => isConfirmed ? current.filter((staffId) => staffId !== id) : [...current, id]);
-    setMessage(isConfirmed ? `${name} returned to provisional.` : `${name} is confirmed in this local preview.`);
+  function updateCurrent(change: (event: StaffEvent) => StaffEvent) {
+    if (!current) return;
+    setEvents((items) =>
+      items.map((item) => (item.id === current.id ? change(item) : item)),
+    );
   }
-
-  function addEvent(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    const name = String(data.get('eventName') || '').trim();
-    setCreatedEvent(name);
-    setShowCreate(false);
-    setMessage(`${name} was added to this device preview. It is not saved or shared.`);
-    event.currentTarget.reset();
+  function startCreate() {
+    setDeleted(null);
+    setEditingId(null);
+    setDraft(blankEvent());
+    changeScreen("create");
+  }
+  function startEdit(event: StaffEvent) {
+    if (event.status === "locked") return;
+    setDeleted(null);
+    setEditingId(event.id);
+    setDraft(structuredClone(event));
+    changeScreen("create");
+  }
+  function saveDraft(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (draft.shifts.some((shift) => shift.finish <= shift.start)) {
+      setNotice({
+        tone: "danger",
+        text: "Check the shift times. Each finish time must be after its start time.",
+      });
+      return;
+    }
+    if (
+      draft.shifts.some(
+        (shift) =>
+          shift.places <
+          Math.max(shift.requests.length, shift.assignments.length),
+      )
+    ) {
+      setNotice({
+        tone: "danger",
+        text: "A shift cannot have fewer places than its existing reservations or assignments.",
+      });
+      return;
+    }
+    setEvents((items) =>
+      editingId
+        ? items.map((item) => (item.id === editingId ? draft : item))
+        : [...items, draft],
+    );
+    setCurrentId(draft.id);
+    setNotice({
+      tone: "success",
+      text: `Event ${editingId ? "updated" : "saved as a draft"} on this device.`,
+    });
+    setEditingId(null);
+    setDeleted(null);
+    setScreen("review");
+  }
+  function loadExample() {
+    if (events.some((item) => item.id === "sample-event")) {
+      setNotice({ tone: "info", text: "The small example is already here." });
+      return;
+    }
+    const sample = sampleEvent();
+    setEvents((items) => [...items, sample]);
+    setCurrentId(sample.id);
+    setNotice({
+      tone: "success",
+      text: "A small fictional example was added. Your work was not replaced.",
+    });
+    setScreen("review");
+  }
+  function deleteEvent(event: StaffEvent) {
+    setDeleted(event);
+    setEvents((items) => items.filter((item) => item.id !== event.id));
+    setCurrentId(null);
+    setNotice({
+      tone: "warning",
+      text: `${event.name} was removed from this device.`,
+    });
+    setScreen("events");
+  }
+  function undoDelete() {
+    if (!deleted) return;
+    setEvents((items) => [...items, deleted]);
+    setCurrentId(deleted.id);
+    setDeleted(null);
+    setNotice({ tone: "success", text: "Event restored." });
+  }
+  function publishAvailability() {
+    updateCurrent((event) => ({ ...event, status: "open" }));
+    setNotice({
+      tone: "success",
+      text: "Availability is open in this local preview. No messages were sent.",
+    });
+  }
+  function reserve(shift: Shift) {
+    if (!online) {
+      setNotice({
+        tone: "danger",
+        text: "You are offline. Connect before reserving a place.",
+      });
+      return;
+    }
+    if (
+      !current ||
+      current.status !== "open" ||
+      shift.requests.length >= shift.places
+    )
+      return;
+    setPendingShift(shift.id);
+    setNotice({ tone: "info", text: "Reserving your place…" });
+    window.setTimeout(() => {
+      if (nextOutcome === "failure") {
+        setNextOutcome(null);
+        setPendingShift(null);
+        setNotice({
+          tone: "danger",
+          text: "Reservation was not saved. Your place was not reserved—please try again.",
+        });
+        return;
+      }
+      if (nextOutcome === "conflict") {
+        updateCurrent((event) => ({
+          ...event,
+          shifts: event.shifts.map((item) =>
+            item.id === shift.id
+              ? {
+                  ...item,
+                  requests: [...item.requests, "Another staff member"].slice(
+                    0,
+                    item.places,
+                  ),
+                }
+              : item,
+          ),
+        }));
+        setNextOutcome(null);
+        setPendingShift(null);
+        setNotice({
+          tone: "warning",
+          text: "That place was just reserved by someone else. Capacity has been refreshed.",
+        });
+        return;
+      }
+      updateCurrent((event) => ({
+        ...event,
+        shifts: event.shifts.map((item) =>
+          item.id === shift.id
+            ? { ...item, requests: [...item.requests, previewStaff] }
+            : item,
+        ),
+      }));
+      setPendingShift(null);
+      setNotice({
+        tone: "success",
+        text: "Reserved. Waiting for manager confirmation.",
+      });
+    }, 450);
+  }
+  function release(shift: Shift) {
+    if (!online) {
+      setNotice({
+        tone: "danger",
+        text: "You are offline. Connect before releasing a place.",
+      });
+      return;
+    }
+    updateCurrent((event) => ({
+      ...event,
+      shifts: event.shifts.map((item) =>
+        item.id === shift.id
+          ? {
+              ...item,
+              requests: item.requests.filter((name) => name !== previewStaff),
+              assignments: item.assignments.filter(
+                (name) => name !== previewStaff,
+              ),
+            }
+          : item,
+      ),
+    }));
+    setNotice({ tone: "success", text: "Your reservation was released." });
+  }
+  function toggleAssignment(shiftId: string, name: string) {
+    if (current?.status === "locked") return;
+    updateCurrent((event) => ({
+      ...event,
+      shifts: event.shifts.map((shift) => {
+        if (shift.id !== shiftId) return shift;
+        const selected = shift.assignments.includes(name);
+        if (!selected && shift.assignments.length >= shift.places) return shift;
+        return {
+          ...shift,
+          assignments: selected
+            ? shift.assignments.filter((person) => person !== name)
+            : [...shift.assignments, name],
+        };
+      }),
+    }));
+  }
+  function publishRoster() {
+    updateCurrent((event) => ({
+      ...event,
+      rosterPublished: true,
+      status: "locked",
+    }));
+    setNotice({
+      tone: "success",
+      text: "Roster published in this local preview. No messages were sent.",
+    });
   }
 
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="StamStaff home"><span className="brand-mark" aria-hidden="true">S</span><span>StamStaff</span></a>
-        <div className="preview-switch" aria-label="Preview role">
-          <span>Preview as</span>
-          <div>
-            <button className={mode === 'staff' ? 'selected' : ''} type="button" onClick={() => setMode('staff')}>Staff</button>
-            <button className={mode === 'manager' ? 'selected' : ''} type="button" onClick={() => setMode('manager')}>Manager</button>
-          </div>
-        </div>
-        <button className="profile-button" type="button" aria-label={`Open fictional ${mode} profile`}>
-          <span className="avatar" aria-hidden="true">{mode === 'staff' ? 'R' : 'M'}</span>
-          <span className="profile-copy"><strong>{mode === 'staff' ? 'Riley' : 'Morgan'}</strong><small>{mode === 'staff' ? 'Staff' : 'Manager'} preview</small></span>
-        </button>
-      </header>
-
-      <div className="demo-banner" role="note"><strong>Interactive prototype</strong><span>Fictional local data only — role switching is not authentication; changes are not saved or shared.</span></div>
-
-      {mode === 'staff' ? (
-        <StaffView reserved={reserved} setMessage={setMessage} toggleReservation={toggleReservation} showStates={showStates} setShowStates={setShowStates} />
-      ) : (
-        <ManagerView confirmed={confirmed} createdEvent={createdEvent} setShowCreate={setShowCreate} toggleConfirmation={toggleConfirmation} />
-      )}
-
-      {showCreate && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowCreate(false)}>
-          <section className="modal" role="dialog" aria-modal="true" aria-labelledby="new-event-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="modal-heading"><div><span className="step">Local preview</span><h2 id="new-event-title">Add an event</h2></div><button type="button" onClick={() => setShowCreate(false)} aria-label="Close event form">×</button></div>
-            <p className="form-intro">Start with the essentials. More detail can be added later, once the team knows what it needs.</p>
-            <form onSubmit={addEvent}>
-              <label>Event name<input name="eventName" placeholder="e.g. Riverside market" required /></label>
-              <div className="form-row"><label>Date<input name="date" type="date" required /></label><label>Location<input name="location" placeholder="Suburb or venue" required /></label></div>
-              <fieldset><legend>First shift</legend><div className="form-row"><label>Starts<input name="start" type="time" required /></label><label>Finishes<input name="finish" type="time" required /></label><label>Places<input name="capacity" type="number" min="1" max="20" defaultValue="4" required /></label></div></fieldset>
-              <div className="form-note"><strong>Prototype note:</strong> this event stays only on this page until refresh. Do not enter real staff or customer information.</div>
-              <div className="form-actions"><button className="button secondary" type="button" onClick={() => setShowCreate(false)}>Cancel</button><button className="button primary" type="submit">Add event</button></div>
-            </form>
-          </section>
+      <Header
+        infoOpen={infoOpen}
+        setInfoOpen={setInfoOpen}
+        resetOpen={resetOpen}
+        setResetOpen={setResetOpen}
+        nextOutcome={nextOutcome}
+        setNextOutcome={setNextOutcome}
+        reset={() => {
+          localStorage.removeItem(storageKey);
+          setEvents([]);
+          setCurrentId(null);
+          setDeleted(null);
+          setResetOpen(false);
+          setScreen("events");
+          setNotice({ tone: "success", text: "Prototype data reset." });
+        }}
+      />
+      {notice && (
+        <div className={`notice ${notice.tone}`} role="status">
+          <span>{notice.text}</span>
+          {deleted &&
+            notice.text === `${deleted.name} was removed from this device.` && (
+              <button type="button" onClick={undoDelete}>
+                Undo
+              </button>
+            )}
+          <button
+            className="notice-close"
+            type="button"
+            aria-label="Dismiss message"
+            onClick={() => setNotice(null)}
+          >
+            ×
+          </button>
         </div>
       )}
-
-      <div className={`toast${message ? ' show' : ''}`} role="status" aria-live="polite"><span>{message}</span>{message && <button type="button" onClick={() => setMessage('')} aria-label="Dismiss message">×</button>}</div>
+      {screen === "events" && (
+        <Events
+          events={events}
+          ready={ready}
+          startCreate={startCreate}
+          loadExample={loadExample}
+          open={(id) => changeScreen("review", id)}
+        />
+      )}
+      {screen === "create" && (
+        <CreateEvent
+          draft={draft}
+          editing={Boolean(editingId)}
+          setDraft={setDraft}
+          save={saveDraft}
+          cancel={() => changeScreen(editingId ? "review" : "events")}
+        />
+      )}
+      {screen === "review" && current && (
+        <ManagerEvent
+          event={current}
+          publish={publishAvailability}
+          edit={() => startEdit(current)}
+          preview={() => changeScreen("staff-list")}
+          requests={() => changeScreen("requests")}
+          remove={() => deleteEvent(current)}
+          back={() => changeScreen("events")}
+        />
+      )}
+      {screen === "staff-list" && current && (
+        <StaffEvents
+          event={current}
+          open={() => changeScreen("staff")}
+          manager={() => changeScreen("review")}
+          myShifts={() => changeScreen("my-shifts")}
+        />
+      )}
+      {screen === "staff" && current && (
+        <StaffEventView
+          event={current}
+          online={online}
+          pendingShift={pendingShift}
+          reserve={reserve}
+          release={release}
+          events={() => changeScreen("staff-list")}
+          manager={() => changeScreen("review")}
+          myShifts={() => changeScreen("my-shifts")}
+        />
+      )}
+      {screen === "requests" && current && (
+        <Requests
+          event={current}
+          toggle={toggleAssignment}
+          roster={() => changeScreen("roster")}
+          back={() => changeScreen("review")}
+        />
+      )}
+      {screen === "roster" && current && (
+        <Roster
+          event={current}
+          publish={publishRoster}
+          back={() => changeScreen("requests")}
+          eventPage={() => changeScreen("review")}
+          staff={() => changeScreen("my-shifts")}
+        />
+      )}
+      {screen === "my-shifts" && current && (
+        <MyShifts
+          event={current}
+          back={() => changeScreen("staff")}
+          events={() => changeScreen("staff-list")}
+          manager={() => changeScreen("review")}
+        />
+      )}
+      <footer className="app-footer">
+        <span>StamStaff prototype</span>
+        <span>by Lang Systems</span>
+      </footer>
     </main>
   );
 }
 
-function StaffView({ reserved, setMessage, toggleReservation, showStates, setShowStates }: {
-  reserved: string[];
-  setMessage: (message: string) => void;
-  toggleReservation: (id: string, label: string) => void;
-  showStates: boolean;
-  setShowStates: (value: boolean) => void;
+function Header({
+  infoOpen,
+  setInfoOpen,
+  resetOpen,
+  setResetOpen,
+  nextOutcome,
+  setNextOutcome,
+  reset,
+}: {
+  infoOpen: boolean;
+  setInfoOpen: (value: boolean) => void;
+  resetOpen: boolean;
+  setResetOpen: (value: boolean) => void;
+  nextOutcome: "conflict" | "failure" | null;
+  setNextOutcome: (value: "conflict" | "failure" | null) => void;
+  reset: () => void;
 }) {
   return (
     <>
-      <section className="hero" id="top">
-        <div className="eyebrow">Your next event</div>
-        <div className="hero-grid">
-          <div><p className="date-line">Saturday · 17 October</p><h1>Harbour Lights<br />Food Festival</h1><p className="hero-copy">Choose the hours that suit you. Reserving a place shows the manager you’re available.</p></div>
-          <aside className="event-card" aria-label="Event details">
-            <div><span className="detail-icon" aria-hidden="true">⌖</span><p><strong>Portside Lawns</strong><small>Adelaide SA · Fictional event</small></p></div>
-            <div><span className="detail-icon" aria-hidden="true">◷</span><p><strong>9:00 am – 7:00 pm</strong><small>Australia/Adelaide time</small></p></div>
-            <div><span className="detail-icon" aria-hidden="true">i</span><p><strong>Reservations close Thursday</strong><small>Final roster is confirmed by the manager</small></p></div>
+      <header className="app-header">
+        <span className="wordmark">StamStaff</span>
+        <button
+          className="prototype-chip"
+          type="button"
+          aria-expanded={infoOpen}
+          onClick={() => setInfoOpen(!infoOpen)}
+        >
+          Local prototype <span aria-hidden="true">i</span>
+        </button>
+      </header>
+      {infoOpen && (
+        <aside className="prototype-panel">
+          <div>
+            <strong>About this prototype</strong>
+            <p>
+              Saved on this device. No account, team sync, notifications or real
+              roster authority. Use fictional details only.
+            </p>
+            <details className="test-controls">
+              <summary>Test reservation states</summary>
+              <div>
+                <button
+                  type="button"
+                  aria-pressed={nextOutcome === "conflict"}
+                  onClick={() =>
+                    setNextOutcome(
+                      nextOutcome === "conflict" ? null : "conflict",
+                    )
+                  }
+                >
+                  Next attempt: conflict
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={nextOutcome === "failure"}
+                  onClick={() =>
+                    setNextOutcome(nextOutcome === "failure" ? null : "failure")
+                  }
+                >
+                  Next attempt: failure
+                </button>
+              </div>
+            </details>
+          </div>
+          {resetOpen ? (
+            <div
+              className="reset-confirm"
+              role="group"
+              aria-label="Confirm reset"
+            >
+              <span>Remove all local prototype data?</span>
+              <button type="button" onClick={() => setResetOpen(false)}>
+                Keep data
+              </button>
+              <button className="danger-link" type="button" onClick={reset}>
+                Reset
+              </button>
+            </div>
+          ) : (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setResetOpen(true)}
+            >
+              Reset prototype data
+            </button>
+          )}
+        </aside>
+      )}
+    </>
+  );
+}
+
+function ManagerNav({ active }: { active: "events" | "requests" | "roster" }) {
+  return (
+    <ol className="task-nav" aria-label="Manager workflow">
+      <li
+        className={active === "events" ? "active" : ""}
+        aria-current={active === "events" ? "step" : undefined}
+      >
+        <span>1</span> Events
+      </li>
+      <li
+        className={active === "requests" ? "active" : ""}
+        aria-current={active === "requests" ? "step" : undefined}
+      >
+        <span>2</span> Requests
+      </li>
+      <li
+        className={active === "roster" ? "active" : ""}
+        aria-current={active === "roster" ? "step" : undefined}
+      >
+        <span>3</span> Roster
+      </li>
+    </ol>
+  );
+}
+function PageHeading({
+  id,
+  kicker,
+  title,
+  copy,
+  action,
+}: {
+  id?: string;
+  kicker: string;
+  title: string;
+  copy: string;
+  action?: React.ReactNode;
+}) {
+  const headingId =
+    id ??
+    (title === "Events"
+      ? "events-title"
+      : title === "Event details"
+        ? "create-title"
+        : undefined);
+  return (
+    <div className="page-heading">
+      <div>
+        <p className="kicker">{kicker}</p>
+        <h1 id={headingId} tabIndex={-1}>
+          {title}
+        </h1>
+        <p>{copy}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+function Back({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button className="back-button" type="button" onClick={onClick}>
+      ← {children}
+    </button>
+  );
+}
+
+function Events({
+  events,
+  ready,
+  startCreate,
+  loadExample,
+  open,
+}: {
+  events: StaffEvent[];
+  ready: boolean;
+  startCreate: () => void;
+  loadExample: () => void;
+  open: (id: string) => void;
+}) {
+  return (
+    <>
+      <ManagerNav active="events" />
+      <section className="workspace" aria-labelledby="events-title">
+        <PageHeading
+          kicker="Manager workspace"
+          title="Events"
+          copy="Create an event, offer shift places, then review who is available."
+          action={
+            events.length ? (
+              <button
+                className="button primary"
+                type="button"
+                onClick={startCreate}
+              >
+                Create event
+              </button>
+            ) : undefined
+          }
+        />
+        {!ready ? (
+          <div className="loading-row" role="status">
+            Loading events…
+          </div>
+        ) : events.length ? (
+          <div className="event-list">
+            {events.map((event) => (
+              <article className="event-row" key={event.id}>
+                <div>
+                  <Status
+                    value={
+                      event.rosterPublished
+                        ? "Roster published"
+                        : event.status === "open"
+                          ? "Availability open"
+                          : "Draft"
+                    }
+                  />
+                  <h2>{event.name}</h2>
+                  <p>
+                    {formatDate(event.date)} · {event.location}
+                  </p>
+                </div>
+                <div className="coverage">
+                  <strong>{event.shifts.length}</strong>
+                  <span>{event.shifts.length === 1 ? "shift" : "shifts"}</span>
+                </div>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => open(event.id)}
+                >
+                  Open event
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <div className="empty-mark" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+            <h2>No events yet</h2>
+            <p>
+              Start with the event basics and one shift. Add detail as the team
+              needs it.
+            </p>
+            <button
+              className="button primary"
+              type="button"
+              onClick={startCreate}
+            >
+              Create event
+            </button>
+            <button className="text-button" type="button" onClick={loadExample}>
+              Load a small example
+            </button>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function CreateEvent({
+  draft,
+  editing,
+  setDraft,
+  save,
+  cancel,
+}: {
+  draft: StaffEvent;
+  editing: boolean;
+  setDraft: React.Dispatch<React.SetStateAction<StaffEvent>>;
+  save: (event: FormEvent<HTMLFormElement>) => void;
+  cancel: () => void;
+}) {
+  function updateShift(
+    id: string,
+    field: keyof Pick<Shift, "start" | "finish" | "places">,
+    value: string,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      shifts: current.shifts.map((shift) =>
+        shift.id === id
+          ? { ...shift, [field]: field === "places" ? Number(value) : value }
+          : shift,
+      ),
+    }));
+  }
+  return (
+    <>
+      <ManagerNav active="events" />
+      <section className="workspace narrow" aria-labelledby="create-title">
+        <Back onClick={cancel}>{editing ? draft.name : "Events"}</Back>
+        <PageHeading
+          kicker={editing ? "Edit event" : "New event"}
+          title="Event details"
+          copy="Only add what the team needs to reserve a place."
+        />
+        <form className="event-form" onSubmit={save}>
+          <fieldset className="form-section">
+            <legend>Event</legend>
+            <label>
+              Event name
+              <input
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                required
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={draft.date}
+                  onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                  required
+                />
+              </label>
+              <label>
+                Location
+                <input
+                  value={draft.location}
+                  onChange={(e) =>
+                    setDraft({ ...draft, location: e.target.value })
+                  }
+                  required
+                />
+              </label>
+            </div>
+          </fieldset>
+          <fieldset className="form-section">
+            <legend>Shifts</legend>
+            {draft.shifts.map((shift, index) => {
+              const minimumPlaces = Math.max(
+                1,
+                shift.requests.length,
+                shift.assignments.length,
+              );
+              const capacityInvalid = shift.places < minimumPlaces;
+              return (
+                <div className="shift-editor" key={shift.id}>
+                  <strong>Shift {index + 1}</strong>
+                  <div className="shift-fields">
+                    <label>
+                      Starts
+                      <input
+                        type="time"
+                        value={shift.start}
+                        onChange={(e) =>
+                          updateShift(shift.id, "start", e.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    <label>
+                      Finishes
+                      <input
+                        type="time"
+                        value={shift.finish}
+                        onChange={(e) =>
+                          updateShift(shift.id, "finish", e.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    <label>
+                      Places
+                      <input
+                        type="number"
+                        min={minimumPlaces}
+                        max="50"
+                        value={shift.places}
+                        aria-invalid={capacityInvalid}
+                        aria-describedby={
+                          minimumPlaces > 1
+                            ? `${shift.id}-capacity-help`
+                            : undefined
+                        }
+                        onChange={(e) =>
+                          updateShift(shift.id, "places", e.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                  </div>
+                  {minimumPlaces > 1 && (
+                    <span
+                      className={capacityInvalid ? "field-error" : "field-help"}
+                      id={`${shift.id}-capacity-help`}
+                    >
+                      Keep at least {minimumPlaces} places for existing
+                      reservations or assignments.
+                    </span>
+                  )}
+                  {draft.shifts.length > 1 &&
+                    shift.requests.length === 0 &&
+                    shift.assignments.length === 0 && (
+                      <button
+                        className="text-button danger-link"
+                        type="button"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            shifts: draft.shifts.filter(
+                              (item) => item.id !== shift.id,
+                            ),
+                          })
+                        }
+                      >
+                        Remove shift
+                      </button>
+                    )}
+                  {draft.shifts.length > 1 &&
+                    (shift.requests.length > 0 ||
+                      shift.assignments.length > 0) && (
+                      <span className="field-help">
+                        This shift has reservations or assignments and cannot be
+                        removed.
+                      </span>
+                    )}
+                </div>
+              );
+            })}
+            <button
+              className="button secondary add-shift"
+              type="button"
+              onClick={() =>
+                setDraft({ ...draft, shifts: [...draft.shifts, newShift()] })
+              }
+            >
+              Add another shift
+            </button>
+          </fieldset>
+          <p className="privacy-note">
+            Saved on this device only. Use fictional details for this prototype.
+          </p>
+          <div className="form-actions">
+            <button className="button secondary" type="button" onClick={cancel}>
+              Cancel
+            </button>
+            <button className="button primary" type="submit">
+              {editing ? "Save changes" : "Review event"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </>
+  );
+}
+
+function ManagerEvent({
+  event,
+  publish,
+  edit,
+  preview,
+  requests,
+  remove,
+  back,
+}: {
+  event: StaffEvent;
+  publish: () => void;
+  edit: () => void;
+  preview: () => void;
+  requests: () => void;
+  remove: () => void;
+  back: () => void;
+}) {
+  const totalRequests = event.shifts.reduce(
+    (sum, shift) => sum + shift.requests.length,
+    0,
+  );
+  return (
+    <>
+      <ManagerNav active="events" />
+      <section className="workspace">
+        <Back onClick={back}>Events</Back>
+        <PageHeading
+          kicker="Event"
+          title={event.name}
+          copy={`${formatDate(event.date)} · ${event.location}`}
+          action={
+            <Status
+              value={
+                event.status === "open"
+                  ? "Availability open"
+                  : event.status === "locked"
+                    ? "Locked"
+                    : "Draft"
+              }
+            />
+          }
+        />
+        <div className="event-hub">
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Shifts</h2>
+                <p>
+                  {totalRequests} reservation{" "}
+                  {totalRequests === 1 ? "request" : "requests"} so far
+                </p>
+              </div>
+              {event.status === "draft" && (
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={publish}
+                >
+                  Open availability
+                </button>
+              )}
+            </div>
+            {event.shifts.map((shift) => (
+              <ShiftSummary shift={shift} key={shift.id} />
+            ))}
+          </section>
+          <aside className="next-panel">
+            <p className="kicker">Next action</p>
+            {event.status === "draft" ? (
+              <>
+                <h2>Check the staff view</h2>
+                <p>
+                  See exactly what staff will use before opening availability.
+                </p>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={preview}
+                >
+                  Preview staff view
+                </button>
+              </>
+            ) : event.status === "locked" ? (
+              <>
+                <h2>Roster published</h2>
+                <p>
+                  Assignments and event details are locked in this local
+                  preview.
+                </p>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={preview}
+                >
+                  Preview staff view
+                </button>
+              </>
+            ) : (
+              <>
+                <h2>{totalRequests ? "Review requests" : "Share the event"}</h2>
+                <p>
+                  {totalRequests
+                    ? "Reservations are provisional until you select the final roster."
+                    : "Preview the reservation experience while you wait for responses."}
+                </p>
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={totalRequests ? requests : preview}
+                >
+                  {totalRequests ? "Review requests" : "Preview staff view"}
+                </button>
+                {totalRequests > 0 && (
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={preview}
+                  >
+                    Preview staff view
+                  </button>
+                )}
+              </>
+            )}
           </aside>
         </div>
-      </section>
-
-      <section className="content" aria-labelledby="choose-heading">
-        <div className="section-heading">
-          <div><span className="step">Step 1 of 2</span><h2 id="choose-heading">Choose your shift</h2><p>Reserve one or both. You can release your place before reservations close.</p></div>
-          <div className="legend" aria-label="Shift status key"><span><i className="dot dot-open" />Places open</span><span><i className="dot dot-yours" />Your reservation</span></div>
+        <div className="danger-zone">
+          <button
+            className="text-button"
+            type="button"
+            disabled={event.status === "locked"}
+            onClick={edit}
+          >
+            {event.status === "locked" ? "Editing locked" : "Edit event"}
+          </button>
+          <button
+            className="text-button danger-link"
+            type="button"
+            disabled={event.status === "locked"}
+            onClick={remove}
+          >
+            {event.status === "locked" ? "Deletion locked" : "Delete event"}
+          </button>
         </div>
+      </section>
+    </>
+  );
+}
 
+function StaffEvents({
+  event,
+  open,
+  manager,
+  myShifts,
+}: {
+  event: StaffEvent;
+  open: () => void;
+  manager: () => void;
+  myShifts: () => void;
+}) {
+  const places =
+    event.status === "open"
+      ? event.shifts.reduce(
+          (sum, shift) =>
+            sum + Math.max(0, shift.places - shift.requests.length),
+          0,
+        )
+      : 0;
+  return (
+    <>
+      <nav className="staff-nav" aria-label="Staff preview">
+        <span>Staff preview</span>
+        <button type="button" onClick={myShifts}>
+          My shifts
+        </button>
+        <button type="button" onClick={manager}>
+          Exit preview
+        </button>
+      </nav>
+      <section className="workspace staff-workspace">
+        <PageHeading
+          kicker="Staff preview"
+          title="Available events"
+          copy="Choose an event to see the shifts with places open."
+        />
+        <article className="event-row">
+          <div>
+            <Status
+              value={
+                event.status === "open"
+                  ? "Availability open"
+                  : "Reservations locked"
+              }
+            />
+            <h2>{event.name}</h2>
+            <p>
+              {formatDate(event.date)} · {event.location}
+            </p>
+          </div>
+          <div className="coverage">
+            <strong>{places}</strong>
+            <span>places open</span>
+          </div>
+          <button className="button primary" type="button" onClick={open}>
+            View shifts
+          </button>
+        </article>
+      </section>
+    </>
+  );
+}
+
+function StaffEventView({
+  event,
+  online,
+  pendingShift,
+  reserve,
+  release,
+  events,
+  manager,
+  myShifts,
+}: {
+  event: StaffEvent;
+  online: boolean;
+  pendingShift: string | null;
+  reserve: (shift: Shift) => void;
+  release: (shift: Shift) => void;
+  events: () => void;
+  manager: () => void;
+  myShifts: () => void;
+}) {
+  return (
+    <>
+      <nav className="staff-nav" aria-label="Staff preview">
+        <span>Staff preview</span>
+        <button type="button" onClick={events}>
+          Events
+        </button>
+        <button type="button" onClick={myShifts}>
+          My shifts
+        </button>
+        <button type="button" onClick={manager}>
+          Exit preview
+        </button>
+      </nav>
+      <section className="workspace staff-workspace">
+        <Back onClick={events}>Available events</Back>
+        <PageHeading
+          kicker="Available event"
+          title={event.name}
+          copy={`${formatDate(event.date)} · ${event.location}`}
+        />
+        {!online && (
+          <div className="inline-state danger" role="alert">
+            <strong>Offline</strong>
+            <span>Connect to reserve or release a place.</span>
+          </div>
+        )}
         <div className="shift-list">
-          {shifts.map((shift) => {
-            const isReserved = reserved.includes(shift.id);
-            const taken = shift.claimed + (isReserved ? 1 : 0);
-            const remaining = shift.capacity - taken;
+          {event.shifts.map((shift) => {
+            const mine = shift.requests.includes(previewStaff);
+            const remaining = Math.max(0, shift.places - shift.requests.length);
+            const locked = event.status !== "open";
             return (
-              <article className={`shift-card${isReserved ? ' is-reserved' : ''}`} key={shift.id}>
-                <div className="shift-main"><div className="shift-time"><strong>{shift.time}</strong><span>{shift.label}</span></div><p>{shift.note}</p></div>
-                <div className="capacity" aria-label={`${remaining} of ${shift.capacity} places remaining`}><div className="capacity-copy"><strong>{remaining} {remaining === 1 ? 'place' : 'places'} left</strong><span>{taken} of {shift.capacity} reserved</span></div><div className="place-dots" aria-hidden="true">{Array.from({ length: shift.capacity }).map((_, index) => <span className={index < taken ? 'taken' : 'open'} key={index} />)}</div></div>
-                <button className={isReserved ? 'button secondary' : 'button primary'} type="button" onClick={() => toggleReservation(shift.id, shift.label)}>{isReserved ? 'Release my place' : 'Reserve a place'}</button>
-                {isReserved && <div className="reserved-label">Reserved by you · Awaiting manager confirmation</div>}
+              <article className="staff-shift" key={shift.id}>
+                <div>
+                  <p className="shift-time">
+                    {shift.start}–{shift.finish}
+                  </p>
+                  <p className="capacity-text">
+                    {remaining
+                      ? `${remaining} ${remaining === 1 ? "place" : "places"} remaining`
+                      : "Full · no places remaining"}
+                  </p>
+                </div>
+                <div className="shift-action">
+                  {mine && <Status value="Reserved · waiting for manager" />}
+                  {locked ? (
+                    <span className="state-copy">Reservations locked</span>
+                  ) : mine ? (
+                    <button
+                      className="button secondary"
+                      type="button"
+                      disabled={!online}
+                      onClick={() => release(shift)}
+                    >
+                      Release my place
+                    </button>
+                  ) : remaining ? (
+                    <button
+                      className="button primary"
+                      type="button"
+                      disabled={!online || pendingShift === shift.id}
+                      onClick={() => reserve(shift)}
+                    >
+                      {pendingShift === shift.id
+                        ? "Reserving…"
+                        : "Reserve a place"}
+                    </button>
+                  ) : (
+                    <span className="state-copy">This shift is full</span>
+                  )}
+                </div>
               </article>
             );
           })}
         </div>
-
-        <aside className="reassurance"><span aria-hidden="true">✓</span><p><strong>Your choice isn’t the final roster yet.</strong><span>The manager will review everyone’s availability and confirm who is working.</span></p></aside>
-        <button className="states-toggle" type="button" aria-expanded={showStates} onClick={() => setShowStates(!showStates)}>{showStates ? 'Hide' : 'Preview'} important app states</button>
-        {showStates && <StateGallery />}
+        <p className="authority-note">
+          A reservation shows your availability. The manager confirms the final
+          roster.
+        </p>
       </section>
-
-      <nav className="bottom-nav" aria-label="Primary navigation"><a className="active" href="#top"><span aria-hidden="true">⌂</span>Events</a><button type="button" onClick={() => setMessage('Your provisional reservations appear above for this prototype.')}><span aria-hidden="true">▣</span>My shifts</button><button type="button" onClick={() => setMessage('Notifications are not connected in this prototype.')}><span aria-hidden="true">◌</span>Updates</button></nav>
     </>
   );
 }
 
-function ManagerView({ confirmed, createdEvent, setShowCreate, toggleConfirmation }: {
-  confirmed: string[];
-  createdEvent: string | null;
-  setShowCreate: (value: boolean) => void;
-  toggleConfirmation: (id: string, name: string) => void;
+function Requests({
+  event,
+  toggle,
+  roster,
+  back,
+}: {
+  event: StaffEvent;
+  toggle: (shiftId: string, name: string) => void;
+  roster: () => void;
+  back: () => void;
 }) {
+  const totalSelected = event.shifts.reduce(
+    (sum, shift) => sum + shift.assignments.length,
+    0,
+  );
   return (
     <>
-      <section className="manager-hero" id="top">
-        <div><span className="eyebrow">Manager preview</span><h1>Good morning,<br />Morgan.</h1><p>Two places still need a decision for the next fictional event.</p></div>
-        <button className="button light" type="button" onClick={() => setShowCreate(true)}>＋ Add an event</button>
-      </section>
-      <section className="manager-content">
-        {createdEvent && <div className="created-event"><span aria-hidden="true">✓</span><p><strong>{createdEvent}</strong><small>Added to this local preview · not published or saved</small></p></div>}
-        <div className="manager-summary">
-          <article><span>Next event</span><strong>17 Oct</strong><small>Harbour Lights</small></article>
-          <article><span>Total places</span><strong>8</strong><small>Across 2 shifts</small></article>
-          <article><span>Provisional</span><strong>{4 - confirmed.length}</strong><small>Awaiting your decision</small></article>
-          <article><span>Confirmed</span><strong>{confirmed.length}</strong><small>Final assignments</small></article>
-        </div>
-        <div className="roster-panel">
-          <div className="roster-heading"><div><span className="step">Step 2 of 2</span><h2>Confirm the roster</h2><p>A reservation holds capacity. You still decide the final assignments.</p></div><span className="open-badge">Reservations open</span></div>
-          <div className="roster-list">
-            {claimants.map((person) => {
-              const isConfirmed = confirmed.includes(person.id);
-              return <article key={person.id}><span className="person-avatar" aria-hidden="true">{person.initials}</span><p><strong>{person.name}</strong><small>{person.shift}</small></p><span className={`status-pill ${isConfirmed ? 'confirmed' : 'provisional'}`}>{isConfirmed ? 'Confirmed' : person.status}</span><button className={isConfirmed ? 'mini-button undo' : 'mini-button'} type="button" onClick={() => toggleConfirmation(person.id, person.name)}>{isConfirmed ? 'Undo' : 'Confirm'}</button></article>;
-            })}
-          </div>
-          <footer><p><strong>Not ready to publish?</strong><span>Your decisions stay in this preview while you explore.</span></p><button className="button primary" type="button" onClick={() => alert('Prototype only: publication and notifications are not connected.')}>Preview final roster</button></footer>
+      <ManagerNav active="requests" />
+      <section className="workspace">
+        <Back onClick={back}>{event.name}</Back>
+        <PageHeading
+          kicker="Manager workspace"
+          title="Reservation requests"
+          copy="Select final assignments by shift. Reservations do not assign staff automatically."
+          action={
+            <button className="button primary" type="button" onClick={roster}>
+              Review roster ({totalSelected})
+            </button>
+          }
+        />
+        <div className="request-groups">
+          {event.shifts.map((shift) => (
+            <section className="panel" key={shift.id}>
+              <div className="panel-heading">
+                <div>
+                  <h2>
+                    {shift.start}–{shift.finish}
+                  </h2>
+                  <p>
+                    {shift.assignments.length} of {shift.places} places selected
+                  </p>
+                </div>
+                <Status
+                  value={
+                    shift.assignments.length >= shift.places
+                      ? "Filled"
+                      : `${shift.places - shift.assignments.length} to fill`
+                  }
+                />
+              </div>
+              {shift.requests.length ? (
+                <div className="person-list">
+                  {shift.requests.map((name) => (
+                    <label className="person-row" key={name}>
+                      <span>
+                        <strong>{name}</strong>
+                        <small>Reserved · awaiting decision</small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={shift.assignments.includes(name)}
+                        disabled={
+                          event.status === "locked" ||
+                          (!shift.assignments.includes(name) &&
+                            shift.assignments.length >= shift.places)
+                        }
+                        onChange={() => toggle(shift.id, name)}
+                      />
+                      <span className="checkbox-ui" aria-hidden="true" />
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <div className="small-empty">No requests yet.</div>
+              )}
+            </section>
+          ))}
         </div>
       </section>
     </>
   );
 }
 
-function StateGallery() {
-  const states = [
-    ['Full', 'All places are taken. No reserve action is offered.', 'full'],
-    ['Locked', 'Reservations have closed. Contact the manager for urgent changes.', 'locked'],
-    ['Offline', 'Connect to reserve or release a place. No false success is shown.', 'offline'],
-    ['Conflict', 'That last place was just reserved. Capacity has been refreshed.', 'conflict'],
-  ];
-  return <div className="state-gallery">{states.map(([title, copy, state]) => <article className={state} key={title}><span>{title}</span><p>{copy}</p></article>)}</div>;
+function Roster({
+  event,
+  publish,
+  back,
+  eventPage,
+  staff,
+}: {
+  event: StaffEvent;
+  publish: () => void;
+  back: () => void;
+  eventPage: () => void;
+  staff: () => void;
+}) {
+  const incomplete = event.shifts.some(
+    (shift) => shift.assignments.length < shift.places,
+  );
+  return (
+    <>
+      <ManagerNav active="roster" />
+      <section className="workspace narrow">
+        <Back onClick={event.rosterPublished ? eventPage : back}>
+          {event.rosterPublished ? event.name : "Requests"}
+        </Back>
+        <PageHeading
+          kicker="Final review"
+          title="Roster"
+          copy={`${event.name} · ${formatDate(event.date)}`}
+        />
+        {incomplete && !event.rosterPublished && (
+          <div className="inline-state warning">
+            <strong>Roster has open places</strong>
+            <span>
+              You can still publish, or return to requests and select more
+              people.
+            </span>
+          </div>
+        )}
+        <div className="roster-groups">
+          {event.shifts.map((shift) => (
+            <section className="panel" key={shift.id}>
+              <div className="panel-heading">
+                <div>
+                  <h2>
+                    {shift.start}–{shift.finish}
+                  </h2>
+                  <p>
+                    {shift.assignments.length} of {shift.places} places assigned
+                  </p>
+                </div>
+              </div>
+              {shift.assignments.length ? (
+                <ul className="assigned-list">
+                  {shift.assignments.map((name) => (
+                    <li key={name}>
+                      {name}
+                      <Status value="Confirmed" />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="small-empty">No one assigned.</div>
+              )}
+            </section>
+          ))}
+        </div>
+        {event.rosterPublished ? (
+          <div className="inline-state success">
+            <strong>Roster published in this prototype</strong>
+            <span>
+              No messages were sent.{" "}
+              <button className="text-button" type="button" onClick={staff}>
+                Preview staff outcome
+              </button>
+            </span>
+          </div>
+        ) : (
+          <div className="sticky-action">
+            <button className="button primary" type="button" onClick={publish}>
+              Publish local roster
+            </button>
+            <span>Prototype only · no notifications</span>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function MyShifts({
+  event,
+  back,
+  events,
+  manager,
+}: {
+  event: StaffEvent;
+  back: () => void;
+  events: () => void;
+  manager: () => void;
+}) {
+  const requested = event.shifts.filter((shift) =>
+    shift.requests.includes(previewStaff),
+  );
+  return (
+    <>
+      <nav className="staff-nav" aria-label="Staff preview">
+        <span>Staff preview</span>
+        <button type="button" onClick={events}>
+          Events
+        </button>
+        <button type="button" onClick={manager}>
+          Exit preview
+        </button>
+      </nav>
+      <section className="workspace narrow">
+        <Back onClick={back}>Available event</Back>
+        <PageHeading
+          kicker="Staff preview"
+          title="My shifts"
+          copy={event.name}
+        />
+        {requested.length ? (
+          <div className="shift-list">
+            {requested.map((shift) => {
+              const assigned = shift.assignments.includes(previewStaff);
+              return (
+                <article className="staff-shift" key={shift.id}>
+                  <div>
+                    <p className="shift-time">
+                      {shift.start}–{shift.finish}
+                    </p>
+                    <p className="capacity-text">
+                      {formatDate(event.date)} · {event.location}
+                    </p>
+                  </div>
+                  {event.rosterPublished ? (
+                    <Status value={assigned ? "Confirmed" : "Not assigned"} />
+                  ) : (
+                    <Status value="Reserved · waiting for manager" />
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty-state compact">
+            <h2>No reservations yet</h2>
+            <p>Reserve an available place to see it here.</p>
+            <button className="button primary" type="button" onClick={back}>
+              View available event
+            </button>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function ShiftSummary({ shift }: { shift: Shift }) {
+  return (
+    <div className="shift-summary">
+      <div>
+        <strong>
+          {shift.start}–{shift.finish}
+        </strong>
+        <span>
+          {shift.places} {shift.places === 1 ? "place" : "places"}
+        </span>
+      </div>
+      <span>{shift.requests.length} reserved</span>
+    </div>
+  );
+}
+function Status({ value }: { value: string }) {
+  const tone =
+    value.includes("Confirmed") ||
+    value.includes("published") ||
+    value === "Filled"
+      ? "success"
+      : value.includes("Not assigned") || value === "Locked"
+        ? "neutral"
+        : value.includes("open") || value.includes("Reserved")
+          ? "info"
+          : "warning";
+  return <span className={`status ${tone}`}>{value}</span>;
 }

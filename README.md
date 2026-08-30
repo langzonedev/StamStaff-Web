@@ -4,7 +4,9 @@ Public, external-facing PWA prototype for **StamStaff — simple event availabil
 
 ## Current state
 
-**Interactive fictional-data prototype.** The current build demonstrates staff shift reservation/release, manager confirmation, event entry and key failure/lock states. It does not provide real accounts, authentication, shared capacity, email delivery, durable storage or production rostering.
+**Interactive fictional-data prototype.** The current build starts empty and lets a manager create an event and shifts, open availability, preview staff reservations, select final assignments, and publish a local roster outcome. An optional tiny example is fictional and additive. Prototype data is saved only in the current browser.
+
+It does not provide real accounts, authentication, shared capacity, email delivery, server transactions or production rostering.
 
 **Phone test:** [Open the owner-only StamStaff prototype](https://stampstaff-prototype.langaz35.chatgpt.site)
 
@@ -24,13 +26,14 @@ Assume every file, commit, build artifact, browser bundle, and issue in this rep
 
 ## Prototype journeys
 
-- Switch between clearly labelled staff and manager previews.
-- Reserve or release a fictional capacity-limited shift.
-- Confirm fictional provisional reservations as the manager.
-- Add the essential details for a new event locally.
-- Inspect full, locked, offline and capacity-conflict states.
+- Create, edit, delete and recover a local fictional event.
+- Add one or more capacity-limited shifts.
+- Open availability and preview the staff reservation experience.
+- Reserve or release a place, with pending, full, locked and offline states shown in context.
+- Select final assignments as the manager and publish a local roster outcome.
+- See a staff reservation remain visible as confirmed or not assigned.
 
-All changes reset on refresh. The role switch is not authentication and the displayed capacity is not shared between devices.
+Changes persist in this browser until the prototype is reset. Staff preview controls are not authentication, and displayed capacity is not shared between devices.
 
 ## Development
 
@@ -42,5 +45,3 @@ npm run dev
 ```
 
 Use `npm run lint` and `npm run build` before publishing a candidate. The private repository remains authoritative for future identity, transactional capacity and notification integration decisions.
-
-
