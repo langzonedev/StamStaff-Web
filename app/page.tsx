@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 
 type Shift = {
   id: string;
+  date: string;
   start: string;
   finish: string;
   places: number;
@@ -14,9 +15,12 @@ type StaffEvent = {
   id: string;
   name: string;
   date: string;
+  endDate: string;
   location: string;
   status: "draft" | "open" | "locked";
   rosterPublished: boolean;
+  managerEditMode?: boolean;
+  lastChangeNote?: string;
   shifts: Shift[];
 };
 type Screen =
@@ -46,8 +50,9 @@ const screens: Screen[] = [
 
 const storageKey = "stampstaff.prototype.v2";
 const previewStaff = "Preview staff member";
-const newShift = (id = crypto.randomUUID()): Shift => ({
+const newShift = (date = "", id = crypto.randomUUID()): Shift => ({
   id,
+  date,
   start: "09:00",
   finish: "13:00",
   places: 4,
@@ -58,6 +63,7 @@ const blankEvent = (): StaffEvent => ({
   id: crypto.randomUUID(),
   name: "",
   date: "",
+  endDate: "",
   location: "",
   status: "draft",
   rosterPublished: false,
@@ -67,12 +73,14 @@ const sampleEvent = (): StaffEvent => ({
   id: "sample-event",
   name: "Spring market",
   date: "2026-10-17",
+  endDate: "2026-10-18",
   location: "Sample venue",
   status: "open",
   rosterPublished: false,
   shifts: [
     {
       id: "sample-morning",
+      date: "2026-10-17",
       start: "09:00",
       finish: "13:00",
       places: 3,
@@ -81,17 +89,51 @@ const sampleEvent = (): StaffEvent => ({
     },
     {
       id: "sample-afternoon",
+      date: "2026-10-17",
       start: "13:00",
       finish: "17:00",
       places: 2,
       requests: ["Jamie Brooks"],
       assignments: [],
     },
+    {
+      id: "sample-sunday-morning",
+      date: "2026-10-18",
+      start: "08:00",
+      finish: "12:00",
+      places: 2,
+      requests: ["Alex Chen"],
+      assignments: [],
+    },
+    {
+      id: "sample-sunday-afternoon",
+      date: "2026-10-18",
+      start: "12:00",
+      finish: "16:00",
+      places: 3,
+      requests: ["Jamie Brooks"],
+      assignments: [],
+    },
   ],
 });
 
+function normalizeEvent(event: StaffEvent): StaffEvent {
+  return {
+    ...event,
+    endDate: event.endDate || event.date,
+    shifts: event.shifts.map((shift) => ({
+      ...shift,
+      date: shift.date || event.date,
+    })),
+  };
+}
+
 function shiftsOverlap(first: Shift, second: Shift) {
-  return first.start < second.finish && second.start < first.finish;
+  return (
+    first.date === second.date &&
+    first.start < second.finish &&
+    second.start < first.finish
+  );
 }
 
 function formatDate(value: string) {
@@ -103,6 +145,12 @@ function formatDate(value: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00Z`));
+}
+
+function formatEventDates(event: StaffEvent) {
+  return event.endDate && event.endDate !== event.date
+    ? `${formatDate(event.date)} – ${formatDate(event.endDate)}`
+    : formatDate(event.date);
 }
 
 function readAppLocation() {
@@ -148,7 +196,9 @@ export default function Home() {
     queueMicrotask(() => {
       try {
         const saved = localStorage.getItem(storageKey);
-        if (saved) setEvents(JSON.parse(saved) as StaffEvent[]);
+        if (saved) {
+          setEvents((JSON.parse(saved) as StaffEvent[]).map(normalizeEvent));
+        }
       } catch {
         setNotice({
           tone: "warning",
@@ -277,6 +327,19 @@ export default function Home() {
   }
   function saveDraft(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
+    if (
+      !draft.endDate ||
+      draft.endDate < draft.date ||
+      draft.shifts.some(
+        (shift) => shift.date < draft.date || shift.date > draft.endDate,
+      )
+    ) {
+      setNotice({
+        tone: "danger",
+        text: "Check the event days. Every shift must fall between the first and last day.",
+      });
+      return;
+    }
     if (draft.shifts.some((shift) => shift.finish <= shift.start)) {
       setNotice({
         tone: "danger",
@@ -447,7 +510,7 @@ export default function Home() {
     setNotice({ tone: "success", text: "Your shift request was released." });
   }
   function toggleAssignment(shiftId: string, name: string) {
-    if (current?.status === "locked") return;
+    if (current?.status === "locked" && !current.managerEditMode) return;
     const target = current?.shifts.find((shift) => shift.id === shiftId);
     const alreadySelected = target?.assignments.includes(name) ?? false;
     const overlap = current?.shifts.find(
@@ -480,7 +543,10 @@ export default function Home() {
     }));
   }
   function publishRoster() {
-    if (!current || current.status !== "open") {
+    const updatingLockedRoster = Boolean(
+      current?.status === "locked" && current.managerEditMode,
+    );
+    if (!current || (current.status !== "open" && !updatingLockedRoster)) {
       setNotice({
         tone: "warning",
         text: "Open availability before publishing a roster.",
@@ -502,40 +568,68 @@ export default function Home() {
       ...event,
       rosterPublished: true,
       status: "locked",
+      managerEditMode: false,
     }));
     setNotice({
       tone: "success",
-      text: "Roster published in this local preview. No messages were sent.",
+      text: updatingLockedRoster
+        ? "Roster changes saved in this local preview. No messages were sent."
+        : "Roster published in this local preview. No messages were sent.",
     });
+  }
+  function beginManagerChange(reason: string) {
+    if (!current || current.status !== "locked") return;
+    updateCurrent((event) => ({
+      ...event,
+      managerEditMode: true,
+      lastChangeNote: reason,
+    }));
+    setNotice({
+      tone: "warning",
+      text: "Manager change mode is active. Review assignments, then publish the updated roster.",
+    });
+    changeScreen("requests");
   }
 
   return (
-    <main className="app-shell">
-      <Header
-        role={role}
-        onRoleChange={(nextRole) => {
-          if (nextRole === "manager") {
-            navigate(current ? "review" : "events");
-            return;
-          }
-          navigate(current?.status === "draft" ? "staff-list" : current ? "staff" : "staff-list");
-        }}
-        infoOpen={infoOpen}
-        setInfoOpen={setInfoOpen}
-        resetOpen={resetOpen}
-        setResetOpen={setResetOpen}
-        nextOutcome={nextOutcome}
-        setNextOutcome={setNextOutcome}
-        reset={() => {
-          localStorage.removeItem(storageKey);
-          setEvents([]);
-          setCurrentId(null);
-          setDeleted(null);
-          setResetOpen(false);
-          changeScreen("events", null);
-          setNotice({ tone: "success", text: "Prototype data reset." });
-        }}
-      />
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <Header
+          role={role}
+          onRoleChange={(nextRole) => {
+            if (nextRole === "manager") {
+              navigate(current ? "review" : "events");
+              return;
+            }
+            navigate(current?.status === "draft" ? "staff-list" : current ? "staff" : "staff-list");
+          }}
+          infoOpen={infoOpen}
+          setInfoOpen={setInfoOpen}
+          resetOpen={resetOpen}
+          setResetOpen={setResetOpen}
+          nextOutcome={nextOutcome}
+          setNextOutcome={setNextOutcome}
+          reset={() => {
+            localStorage.removeItem(storageKey);
+            setEvents([]);
+            setCurrentId(null);
+            setDeleted(null);
+            setResetOpen(false);
+            changeScreen("events", null);
+            setNotice({ tone: "success", text: "Prototype data reset." });
+          }}
+        />
+        <AppNav
+          role={role}
+          screen={screen}
+          eventStatus={current?.status ?? null}
+          openEvents={() => navigate(role === "manager" ? "events" : "staff-list")}
+          openRequests={() => navigate("requests")}
+          openRoster={() => navigate("roster")}
+          openMyShifts={() => navigate("my-shifts")}
+        />
+      </aside>
+      <main className="app-content">
       {notice && (
         <div
           className={`notice ${notice.tone}`}
@@ -564,15 +658,6 @@ export default function Home() {
           <span>Viewing saved data. Reconnect to request or release a shift.</span>
         </div>
       )}
-      <AppNav
-        role={role}
-        screen={screen}
-        eventStatus={current?.status ?? null}
-        openEvents={() => navigate(role === "manager" ? "events" : "staff-list")}
-        openRequests={() => navigate("requests")}
-        openRoster={() => navigate("roster")}
-        openMyShifts={() => navigate("my-shifts")}
-      />
       {pendingNavigation && (
         <ConfirmationDialog
           eyebrow="Unsaved changes"
@@ -613,6 +698,7 @@ export default function Home() {
           edit={() => startEdit(current)}
           preview={() => changeScreen("staff-list")}
           requests={() => changeScreen("requests")}
+          roster={() => changeScreen("roster")}
           remove={() => deleteEvent(current)}
           back={() => changeScreen("events")}
         />
@@ -648,6 +734,7 @@ export default function Home() {
           back={() => changeScreen("requests")}
           eventPage={() => changeScreen("review")}
           staff={() => changeScreen("my-shifts")}
+          beginChange={beginManagerChange}
         />
       )}
       {screen === "my-shifts" && (
@@ -663,7 +750,8 @@ export default function Home() {
         <span>StamStaff prototype</span>
         <span>by Lang Systems</span>
       </footer>
-    </main>
+      </main>
+    </div>
   );
 }
 
@@ -691,9 +779,21 @@ function Header({
   return (
     <>
       <header className="app-header">
-        <span className="wordmark">StamStaff</span>
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">S</span>
+          <span className="wordmark">StamStaff</span>
+        </div>
+        <div className="profile-card">
+          <span className="profile-avatar" aria-hidden="true">
+            {role === "manager" ? "M" : "S"}
+          </span>
+          <span>
+            <strong>{role === "manager" ? "Preview manager" : "Preview staff"}</strong>
+            <small>Fictional account</small>
+          </span>
+        </div>
         <div className="role-control">
-          <span>Preview as</span>
+          <span>Switch workspace</span>
           <div className="role-switch" role="group" aria-label="Preview role">
             <button
               type="button"
@@ -717,7 +817,7 @@ function Header({
           aria-expanded={infoOpen}
           onClick={() => setInfoOpen(!infoOpen)}
         >
-          Local prototype <span aria-hidden="true">i</span>
+          Local data only <span aria-hidden="true">i</span>
         </button>
       </header>
       {infoOpen && (
@@ -809,7 +909,8 @@ function AppNav({
         aria-current={(managerEventActive || staffEventActive) ? "page" : undefined}
         onClick={openEvents}
       >
-        Events
+        <span className="nav-icon" aria-hidden="true">◇</span>
+        <span>Events</span>
       </button>
       {role === "manager" ? (
         <>
@@ -819,7 +920,8 @@ function AppNav({
             disabled={!eventStatus || eventStatus === "draft"}
             onClick={openRequests}
           >
-            Requests
+            <span className="nav-icon" aria-hidden="true">＋</span>
+            <span>Requests</span>
           </button>
           <button
             type="button"
@@ -827,7 +929,8 @@ function AppNav({
             disabled={!eventStatus || eventStatus === "draft"}
             onClick={openRoster}
           >
-            Roster
+            <span className="nav-icon" aria-hidden="true">▤</span>
+            <span>Roster</span>
           </button>
         </>
       ) : (
@@ -836,7 +939,8 @@ function AppNav({
           aria-current={screen === "my-shifts" ? "page" : undefined}
           onClick={openMyShifts}
         >
-          My shifts
+          <span className="nav-icon" aria-hidden="true">✓</span>
+          <span>My shifts</span>
         </button>
       )}
     </nav>
@@ -1002,7 +1106,7 @@ function Events({
                   />
                   <h2>{event.name}</h2>
                   <p>
-                    {formatDate(event.date)} · {event.location}
+                    {formatEventDates(event)} · {event.location}
                   </p>
                 </div>
                 <div className="event-metrics" aria-label="Event staffing summary">
@@ -1059,7 +1163,7 @@ function CreateEvent({
 }) {
   function updateShift(
     id: string,
-    field: keyof Pick<Shift, "start" | "finish" | "places">,
+    field: keyof Pick<Shift, "date" | "start" | "finish" | "places">,
     value: string,
   ) {
     setDraft((current) => ({
@@ -1086,17 +1190,54 @@ function CreateEvent({
               Event name
               <input
                 value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onChange={(e) =>
+                  setDraft((current) => ({ ...current, name: e.target.value }))
+                }
                 required
               />
             </label>
             <div className="form-grid">
               <label>
-                Date
+                First day
                 <input
                   type="date"
                   value={draft.date}
-                  onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                  onChange={(e) => {
+                    const nextDate = e.target.value;
+                    setDraft((current) => {
+                      const previousDate = current.date;
+                      return {
+                        ...current,
+                        date: nextDate,
+                        endDate:
+                          !current.endDate || current.endDate === previousDate
+                            ? nextDate
+                            : current.endDate,
+                        shifts: current.shifts.map((shift) => ({
+                          ...shift,
+                          date:
+                            !shift.date || shift.date === previousDate
+                              ? nextDate
+                              : shift.date,
+                        })),
+                      };
+                    });
+                  }}
+                  required
+                />
+              </label>
+              <label>
+                Last day
+                <input
+                  type="date"
+                  min={draft.date}
+                  value={draft.endDate}
+                  onChange={(e) =>
+                    setDraft((current) => ({
+                      ...current,
+                      endDate: e.target.value,
+                    }))
+                  }
                   required
                 />
               </label>
@@ -1105,7 +1246,10 @@ function CreateEvent({
                 <input
                   value={draft.location}
                   onChange={(e) =>
-                    setDraft({ ...draft, location: e.target.value })
+                    setDraft((current) => ({
+                      ...current,
+                      location: e.target.value,
+                    }))
                   }
                   required
                 />
@@ -1125,6 +1269,19 @@ function CreateEvent({
                 <div className="shift-editor" key={shift.id}>
                   <strong>Shift {index + 1}</strong>
                   <div className="shift-fields">
+                    <label>
+                      Day
+                      <input
+                        type="date"
+                        min={draft.date}
+                        max={draft.endDate || draft.date}
+                        value={shift.date}
+                        onChange={(e) =>
+                          updateShift(shift.id, "date", e.target.value)
+                        }
+                        required
+                      />
+                    </label>
                     <label>
                       Starts
                       <input
@@ -1183,12 +1340,12 @@ function CreateEvent({
                         className="text-button danger-link"
                         type="button"
                         onClick={() =>
-                          setDraft({
-                            ...draft,
-                            shifts: draft.shifts.filter(
+                          setDraft((current) => ({
+                            ...current,
+                            shifts: current.shifts.filter(
                               (item) => item.id !== shift.id,
                             ),
-                          })
+                          }))
                         }
                       >
                         Remove shift
@@ -1209,7 +1366,10 @@ function CreateEvent({
               className="button secondary add-shift"
               type="button"
               onClick={() =>
-                setDraft({ ...draft, shifts: [...draft.shifts, newShift()] })
+                setDraft((current) => ({
+                  ...current,
+                  shifts: [...current.shifts, newShift(current.date)],
+                }))
               }
             >
               Add another shift
@@ -1237,6 +1397,7 @@ function ManagerEvent({
   edit,
   preview,
   requests,
+  roster,
   remove,
   back,
 }: {
@@ -1245,6 +1406,7 @@ function ManagerEvent({
   edit: () => void;
   preview: () => void;
   requests: () => void;
+  roster: () => void;
   remove: () => void;
   back: () => void;
 }) {
@@ -1258,7 +1420,7 @@ function ManagerEvent({
         <Back onClick={back}>Events</Back>
         <PageHeading
           title={event.name}
-          copy={`${formatDate(event.date)} · ${event.location}`}
+          copy={`${formatEventDates(event)} · ${event.location}`}
           action={
             <div className="heading-actions">
               <Status
@@ -1302,6 +1464,15 @@ function ManagerEvent({
                   Requests ({totalRequests})
                 </button>
               )}
+              {event.status === "locked" && (
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={roster}
+                >
+                  View confirmed roster
+                </button>
+              )}
             </div>
             {event.shifts.map((shift) => (
               <ShiftSummary shift={shift} key={shift.id} />
@@ -1321,6 +1492,15 @@ function ManagerEvent({
               setConfirmOpen(false);
             }}
           />
+        )}
+        {event.rosterPublished && (
+          <div className="notification-state">
+            <span aria-hidden="true">✉</span>
+            <div>
+              <strong>Roster email not connected</strong>
+              <p>The shared version will record delivery and retry failures here.</p>
+            </div>
+          </div>
         )}
         <div className="danger-zone">
           <button
@@ -1385,7 +1565,7 @@ function StaffEvents({
                   />
                   <h2>{event.name}</h2>
                   <p>
-                    {formatDate(event.date)} · {event.location}
+                    {formatEventDates(event)} · {event.location}
                   </p>
                   {mine.length > 0 && (
                     <p className="personal-state">
@@ -1404,7 +1584,7 @@ function StaffEvents({
                       );
                       return (
                         <li key={shift.id}>
-                          <span>{shift.start}–{shift.finish}</span>
+                          <span>{formatDate(shift.date)} · {shift.start}–{shift.finish}</span>
                           <span>
                             {event.rosterPublished
                               ? "Roster published"
@@ -1465,7 +1645,7 @@ function StaffEventView({
         <Back onClick={events}>Events</Back>
         <PageHeading
           title={event.name}
-          copy={`${formatDate(event.date)} · ${event.location}`}
+          copy={`${formatEventDates(event)} · ${event.location}`}
         />
         <div className="shift-list">
           {event.shifts.map((shift) => {
@@ -1482,7 +1662,7 @@ function StaffEventView({
               >
                 <div>
                   <p className="shift-time">
-                    {shift.start}–{shift.finish}
+                    {formatDate(shift.date)} · {shift.start}–{shift.finish}
                   </p>
                   <p className="capacity-text">
                     {confirmed
@@ -1548,7 +1728,7 @@ function StaffEventView({
           <ConfirmationDialog
             eyebrow="Release shift request"
             title={event.name}
-            copy={`${formatDate(event.date)} · ${releaseTarget.start}–${releaseTarget.finish}`}
+            copy={`${formatDate(releaseTarget.date)} · ${releaseTarget.start}–${releaseTarget.finish}`}
             cancelLabel="Keep request"
             confirmLabel="Release request"
             onCancel={() => setReleaseTarget(null)}
@@ -1586,15 +1766,23 @@ function Requests({
         <Back onClick={back}>{event.name}</Back>
         <PageHeading
           title="Reservation requests"
-          copy={`${event.name} · ${formatDate(event.date)} · ${event.location}`}
+          copy={`${event.name} · ${formatEventDates(event)} · ${event.location}`}
         />
+        {event.managerEditMode && (
+          <div className="inline-state warning">
+            <strong>Manager change mode</strong>
+            <span>
+              {event.lastChangeNote}. Update assignments, then publish the revised roster.
+            </span>
+          </div>
+        )}
         <div className="request-groups">
           {event.shifts.map((shift) => (
             <section className="panel" key={shift.id}>
               <div className="panel-heading">
                 <div>
                   <h2>
-                    {shift.start}–{shift.finish}
+                    {formatDate(shift.date)} · {shift.start}–{shift.finish}
                   </h2>
                   <p>
                     {shift.assignments.length} of {shift.places} places selected
@@ -1620,7 +1808,7 @@ function Requests({
                         type="checkbox"
                         checked={shift.assignments.includes(name)}
                         disabled={
-                          event.status === "locked" ||
+                          (event.status === "locked" && !event.managerEditMode) ||
                           (!shift.assignments.includes(name) &&
                             shift.assignments.length >= shift.places)
                         }
@@ -1652,14 +1840,17 @@ function Roster({
   back,
   eventPage,
   staff,
+  beginChange,
 }: {
   event: StaffEvent;
   publish: () => void;
   back: () => void;
   eventPage: () => void;
   staff: () => void;
+  beginChange: (reason: string) => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [changeOpen, setChangeOpen] = useState(false);
   const incomplete = event.shifts.some(
     (shift) => shift.assignments.length < shift.places,
   );
@@ -1670,7 +1861,7 @@ function Roster({
         </Back>
         <PageHeading
           title="Roster"
-          copy={`${event.name} · ${formatDate(event.date)}`}
+          copy={`${event.name} · ${formatEventDates(event)}`}
         />
         {incomplete && !event.rosterPublished && (
           <div className="inline-state warning">
@@ -1681,35 +1872,39 @@ function Roster({
             </span>
           </div>
         )}
-        <div className="roster-groups">
-          {event.shifts.map((shift) => (
-            <section className="panel" key={shift.id}>
-              <div className="panel-heading">
-                <div>
-                  <h2>
-                    {shift.start}–{shift.finish}
-                  </h2>
-                  <p>
-                    {shift.assignments.length} of {shift.places} places assigned
-                  </p>
+        {event.rosterPublished && !event.managerEditMode ? (
+          <RosterTimeline event={event} />
+        ) : (
+          <div className="roster-groups">
+            {event.shifts.map((shift) => (
+              <section className="panel" key={shift.id}>
+                <div className="panel-heading">
+                  <div>
+                    <h2>
+                      {formatDate(shift.date)} · {shift.start}–{shift.finish}
+                    </h2>
+                    <p>
+                      {shift.assignments.length} of {shift.places} places assigned
+                    </p>
+                  </div>
                 </div>
-              </div>
-              {shift.assignments.length ? (
-                <ul className="assigned-list">
-                  {shift.assignments.map((name) => (
-                    <li key={name}>
-                      {name}
-                      <Status value="Confirmed" />
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="small-empty">No one assigned.</div>
-              )}
-            </section>
-          ))}
-        </div>
-        {event.rosterPublished ? (
+                {shift.assignments.length ? (
+                  <ul className="assigned-list">
+                    {shift.assignments.map((name) => (
+                      <li key={name}>
+                        {name}
+                        <Status value="Confirmed" />
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="small-empty">No one assigned.</div>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+        {event.rosterPublished && !event.managerEditMode ? (
           <div className="inline-state success">
             <strong>Roster published in this prototype</strong>
             <span>
@@ -1718,6 +1913,13 @@ function Roster({
                 Preview staff outcome
               </button>
             </span>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => setChangeOpen(true)}
+            >
+              Make a final change
+            </button>
           </div>
         ) : (
           <div className="sticky-action">
@@ -1727,17 +1929,19 @@ function Roster({
               disabled={!event.shifts.some((shift) => shift.assignments.length)}
               onClick={() => setConfirmOpen(true)}
             >
-              Publish local roster
+              {event.managerEditMode ? "Publish updated roster" : "Publish local roster"}
             </button>
             <span>Prototype only · no notifications</span>
           </div>
         )}
         {confirmOpen && (
           <ConfirmationDialog
-            eyebrow="Publish roster"
+            eyebrow={event.managerEditMode ? "Publish roster update" : "Publish roster"}
             title={event.name}
             copy={`${event.shifts.reduce((total, shift) => total + shift.assignments.length, 0)} assigned · ${event.shifts.reduce((total, shift) => total + Math.max(0, shift.places - shift.assignments.length), 0)} open places`}
-            note="This locks the roster in the local prototype. No messages will be sent."
+            note={event.managerEditMode
+              ? "This records the revised local roster. No affected staff will be notified."
+              : "This locks the roster in the local prototype. No messages will be sent."}
             cancelLabel="Keep editing"
             confirmLabel="Publish roster"
             onCancel={() => setConfirmOpen(false)}
@@ -1747,7 +1951,149 @@ function Roster({
             }}
           />
         )}
+        {changeOpen && (
+          <ManagerChangeDialog
+            event={event}
+            onCancel={() => setChangeOpen(false)}
+            onConfirm={(reason) => {
+              setChangeOpen(false);
+              beginChange(reason);
+            }}
+          />
+        )}
     </section>
+  );
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function RosterTimeline({ event }: { event: StaffEvent }) {
+  const startMinutes = 6 * 60;
+  const endMinutes = 22 * 60;
+  const duration = endMinutes - startMinutes;
+  const days = [...new Set(event.shifts.map((shift) => shift.date))].sort();
+  return (
+    <section className="timeline-card" aria-labelledby="timeline-title">
+      <div className="timeline-heading">
+        <div>
+          <span className="eyebrow">Confirmed coverage</span>
+          <h2 id="timeline-title">Event roster timeline</h2>
+        </div>
+        <span>{event.shifts.reduce((sum, shift) => sum + shift.assignments.length, 0)} assignments</span>
+      </div>
+      <div className="timeline-scroll" tabIndex={0} aria-label="Scrollable roster timeline">
+        <div className="timeline-canvas">
+          <div className="timeline-axis" aria-hidden="true">
+            {[6, 9, 12, 15, 18, 21].map((hour) => (
+              <span key={hour}>{String(hour).padStart(2, "0")}:00</span>
+            ))}
+          </div>
+          {days.map((day) => (
+            <section className="timeline-day" key={day}>
+              <h3>{formatDate(day)}</h3>
+              {event.shifts
+                .filter((shift) => shift.date === day)
+                .sort((a, b) => a.start.localeCompare(b.start))
+                .map((shift) => {
+                  const start = Math.max(0, timeToMinutes(shift.start) - startMinutes);
+                  const width = Math.max(
+                    45,
+                    Math.min(duration - start, timeToMinutes(shift.finish) - timeToMinutes(shift.start)),
+                  );
+                  return (
+                    <div className="timeline-row" key={shift.id}>
+                      <div className="timeline-meta">
+                        <strong>{shift.start}–{shift.finish}</strong>
+                        <span>{shift.assignments.length}/{shift.places} staffed</span>
+                      </div>
+                      <div className="timeline-track">
+                        <div
+                          className={`timeline-bar ${shift.assignments.length < shift.places ? "has-gap" : ""}`}
+                          style={{
+                            "--timeline-start": `${(start / duration) * 100}%`,
+                            "--timeline-width": `${(width / duration) * 100}%`,
+                          } as React.CSSProperties}
+                          aria-label={`${shift.start} to ${shift.finish}: ${shift.assignments.length} of ${shift.places} staffed`}
+                        >
+                          <strong>{shift.assignments.length ? shift.assignments.join(", ") : "Unfilled"}</strong>
+                          <span>{shift.assignments.length < shift.places ? `${shift.places - shift.assignments.length} open` : "Covered"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </section>
+          ))}
+        </div>
+      </div>
+      <p className="timeline-help">Scroll sideways on smaller screens. Coverage gaps are labelled, not shown by colour alone.</p>
+    </section>
+  );
+}
+
+function ManagerChangeDialog({
+  event,
+  onCancel,
+  onConfirm,
+}: {
+  event: StaffEvent;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+  return (
+    <dialog
+      className="confirmation-dialog change-dialog"
+      ref={dialog}
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+    >
+      <div>
+        <span className="eyebrow">Controlled manager change</span>
+        <h2 id={titleId}>Change {event.name} roster?</h2>
+        <p id={descriptionId}>
+          Record why the confirmed roster needs to change. The connected app will audit this and notify affected staff.
+        </p>
+        <label>
+          Reason for change
+          <textarea
+            autoFocus
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="For example: staff member is no longer available"
+            rows={3}
+          />
+        </label>
+      </div>
+      <div className="confirmation-actions">
+        <button className="button secondary" type="button" onClick={onCancel}>
+          Keep roster locked
+        </button>
+        <button
+          className="button primary"
+          type="button"
+          disabled={reason.trim().length < 8}
+          onClick={() => onConfirm(reason.trim())}
+        >
+          Review assignments
+        </button>
+      </div>
+    </dialog>
   );
 }
 
@@ -1775,8 +2121,8 @@ function MyShifts({
         .map((shift) => ({ event, shift })),
     )
     .sort((a, b) =>
-      `${a.event.date}-${a.shift.start}`.localeCompare(
-        `${b.event.date}-${b.shift.start}`,
+      `${a.shift.date}-${a.shift.start}`.localeCompare(
+        `${b.shift.date}-${b.shift.start}`,
       ),
     );
   return (
@@ -1795,10 +2141,10 @@ function MyShifts({
                   <div>
                     <span className="eyebrow">{event.name}</span>
                     <p className="shift-time">
-                      {shift.start}–{shift.finish}
+                      {formatDate(shift.date)} · {shift.start}–{shift.finish}
                     </p>
                     <p className="capacity-text">
-                      {formatDate(event.date)} · {event.location}
+                      {formatDate(shift.date)} · {event.location}
                     </p>
                   </div>
                   <div className="shift-action">
@@ -1846,7 +2192,7 @@ function MyShifts({
           <ConfirmationDialog
             eyebrow="Release shift request"
             title={releaseTarget.event.name}
-            copy={`${formatDate(releaseTarget.event.date)} · ${releaseTarget.shift.start}–${releaseTarget.shift.finish}`}
+            copy={`${formatDate(releaseTarget.shift.date)} · ${releaseTarget.shift.start}–${releaseTarget.shift.finish}`}
             cancelLabel="Keep request"
             confirmLabel="Release request"
             onCancel={() => setReleaseTarget(null)}
@@ -1865,7 +2211,7 @@ function ShiftSummary({ shift }: { shift: Shift }) {
     <div className="shift-summary">
       <div>
         <strong>
-          {shift.start}–{shift.finish}
+          {formatDate(shift.date)} · {shift.start}–{shift.finish}
         </strong>
         <span>
           {shift.places} {shift.places === 1 ? "place" : "places"}
