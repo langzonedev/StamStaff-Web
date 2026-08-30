@@ -10,6 +10,6 @@
 - More than colour: unavailable/full capacity includes text and programmatic semantics, not grey styling alone.
 - Fictional and truthful: sample data is synthetic; demo limitations remain visible inside the product.
 
-Pretzel Plus branding must not be added until approved assets and usage authority are documented privately. ShowOps identity, terminology, and sample workflows must not be copied.
+Customer-specific branding must not be added until approved assets and usage authority are documented privately. Other Lang Systems product identities, terminology, and sample workflows must not be copied.
 
 
