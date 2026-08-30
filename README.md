@@ -4,7 +4,7 @@ Public, external-facing PWA prototype for **StamStaff — simple event availabil
 
 ## Current state
 
-**Interactive fictional-data prototype.** The current build starts empty and lets a manager create an event and shifts, open availability, preview staff reservations, select final assignments, and publish a local roster outcome. An optional tiny example is fictional and additive. Prototype data is saved only in the current browser.
+**Interactive fictional-data prototype.** The current build starts empty and lets a manager create an event and shifts, open availability, preview staff requests, select final assignments, and publish a local roster outcome. An optional tiny example is fictional and additive. Prototype data is saved only in the current browser.
 
 It does not provide real accounts, authentication, shared capacity, email delivery, server transactions or production rostering.
 
@@ -30,9 +30,9 @@ Assume every file, commit, build artifact, browser bundle, and issue in this rep
 - Add one or more capacity-limited shifts.
 - Switch between the Manager and Staff app views at any time.
 - Open availability and reserve shifts from the Staff view.
-- Reserve or release a place, with pending, full, locked and offline states shown in context.
+- Request or release a shift, with pending, full, locked and offline states shown in context.
 - Select final assignments as the manager and publish a local roster outcome.
-- See a staff reservation remain visible as confirmed or not assigned.
+- See a staff request become confirmed or not assigned.
 
 Changes persist in this browser until the prototype is reset. The role switch is not authentication, and displayed capacity is not shared between devices.
 

@@ -10,7 +10,7 @@
   --wash: #e9eef6;
   --action: #6c19ff;
   --action-dark: #250861;
-  --focus: #0ea5b7;
+  --focus: #087f8c;
   --warning: #b76e00;
   --radius-sm: 6px;
   --radius: 10px;
@@ -46,7 +46,8 @@ button {
   color: inherit;
 }
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+dialog:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }

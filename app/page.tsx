@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 
 type Shift = {
   id: string;
@@ -32,6 +32,17 @@ type Notice = {
   tone: "info" | "success" | "warning" | "danger";
   text: string;
 } | null;
+
+const screens: Screen[] = [
+  "events",
+  "create",
+  "review",
+  "staff-list",
+  "staff",
+  "requests",
+  "roster",
+  "my-shifts",
+];
 
 const storageKey = "stampstaff.prototype.v2";
 const previewStaff = "Preview staff member";
@@ -79,6 +90,10 @@ const sampleEvent = (): StaffEvent => ({
   ],
 });
 
+function shiftsOverlap(first: Shift, second: Shift) {
+  return first.start < second.finish && second.start < first.finish;
+}
+
 function formatDate(value: string) {
   if (!value) return "Date not set";
   return new Intl.DateTimeFormat("en-AU", {
@@ -90,11 +105,22 @@ function formatDate(value: string) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+function readAppLocation() {
+  const [screenValue, eventId] = window.location.hash.slice(1).split("/");
+  return {
+    screen: screens.includes(screenValue as Screen)
+      ? (screenValue as Screen)
+      : ("events" as Screen),
+    eventId: eventId || null,
+  };
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("events");
   const [events, setEvents] = useState<StaffEvent[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [draft, setDraft] = useState<StaffEvent>(() => blankEvent());
+  const [draftBaseline, setDraftBaseline] = useState(() => JSON.stringify(draft));
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -106,6 +132,10 @@ export default function Home() {
   const [nextOutcome, setNextOutcome] = useState<"conflict" | "failure" | null>(
     null,
   );
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    screen: Screen;
+    eventId?: string | null;
+  } | null>(null);
   const role: "manager" | "staff" = [
     "staff-list",
     "staff",
@@ -125,6 +155,9 @@ export default function Home() {
           text: "Saved prototype data could not be loaded. You can still continue on this page.",
         });
       }
+      const location = readAppLocation();
+      setScreen(location.screen);
+      setCurrentId(location.eventId);
       setOnline(navigator.onLine);
       setReady(true);
     });
@@ -158,14 +191,66 @@ export default function Home() {
   }, [screen]);
 
   const current = useMemo(
-    () => events.find((item) => item.id === currentId) ?? events[0] ?? null,
+    () => events.find((item) => item.id === currentId) ?? null,
     [events, currentId],
   );
-  function changeScreen(next: Screen, eventId?: string) {
-    if (eventId) setCurrentId(eventId);
+  useEffect(() => {
+    if (
+      ready &&
+      !current &&
+      ["review", "staff", "requests", "roster"].includes(screen)
+    ) {
+      const fallback: Screen = screen === "staff" ? "staff-list" : "events";
+      queueMicrotask(() => {
+        setScreen(fallback);
+        setCurrentId(null);
+        window.history.replaceState(null, "", `#${fallback}`);
+      });
+    }
+  }, [current, ready, screen]);
+  const draftDirty = JSON.stringify(draft) !== draftBaseline;
+  useEffect(() => {
+    const restoreLocation = () => {
+      const location = readAppLocation();
+      if (screen === "create" && draftDirty) {
+        const currentHash = `#create${currentId ? `/${currentId}` : ""}`;
+        window.history.replaceState(null, "", currentHash);
+        setPendingNavigation({
+          screen: location.screen,
+          eventId: location.eventId,
+        });
+        return;
+      }
+      setScreen(location.screen);
+      setCurrentId(location.eventId);
+      setNotice(null);
+    };
+    window.addEventListener("popstate", restoreLocation);
+    return () => window.removeEventListener("popstate", restoreLocation);
+  }, [currentId, draftDirty, screen]);
+  useEffect(() => {
+    const protectReload = (event: BeforeUnloadEvent) => {
+      if (screen !== "create" || !draftDirty) return;
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", protectReload);
+    return () => window.removeEventListener("beforeunload", protectReload);
+  }, [draftDirty, screen]);
+  function changeScreen(next: Screen, eventId?: string | null) {
+    const nextEventId = eventId !== undefined ? eventId : currentId;
+    if (eventId !== undefined) setCurrentId(eventId);
     setNotice(null);
     setScreen(next);
+    const hash = `#${next}${nextEventId ? `/${nextEventId}` : ""}`;
+    if (window.location.hash !== hash) window.history.pushState(null, "", hash);
     window.scrollTo({ top: 0, behavior: "auto" });
+  }
+  function navigate(next: Screen, eventId?: string | null) {
+    if (screen === "create" && draftDirty) {
+      setPendingNavigation({ screen: next, eventId });
+      return;
+    }
+    changeScreen(next, eventId);
   }
   function updateCurrent(change: (event: StaffEvent) => StaffEvent) {
     if (!current) return;
@@ -176,14 +261,18 @@ export default function Home() {
   function startCreate() {
     setDeleted(null);
     setEditingId(null);
-    setDraft(blankEvent());
-    changeScreen("create");
+    const nextDraft = blankEvent();
+    setDraftBaseline(JSON.stringify(nextDraft));
+    setDraft(nextDraft);
+    changeScreen("create", null);
   }
   function startEdit(event: StaffEvent) {
     if (event.status === "locked") return;
     setDeleted(null);
     setEditingId(event.id);
-    setDraft(structuredClone(event));
+    const nextDraft = structuredClone(event);
+    setDraftBaseline(JSON.stringify(nextDraft));
+    setDraft(nextDraft);
     changeScreen("create");
   }
   function saveDraft(formEvent: FormEvent<HTMLFormElement>) {
@@ -204,7 +293,7 @@ export default function Home() {
     ) {
       setNotice({
         tone: "danger",
-        text: "A shift cannot have fewer places than its existing reservations or assignments.",
+        text: "A shift cannot have fewer places than its existing requests or assignments.",
       });
       return;
     }
@@ -214,13 +303,13 @@ export default function Home() {
         : [...items, draft],
     );
     setCurrentId(draft.id);
+    changeScreen("review", draft.id);
     setNotice({
       tone: "success",
       text: `Event ${editingId ? "updated" : "saved as a draft"} on this device.`,
     });
     setEditingId(null);
     setDeleted(null);
-    setScreen("review");
   }
   function loadExample() {
     if (events.some((item) => item.id === "sample-event")) {
@@ -230,21 +319,21 @@ export default function Home() {
     const sample = sampleEvent();
     setEvents((items) => [...items, sample]);
     setCurrentId(sample.id);
+    changeScreen("review", sample.id);
     setNotice({
       tone: "success",
       text: "A small fictional example was added. Your work was not replaced.",
     });
-    setScreen("review");
   }
   function deleteEvent(event: StaffEvent) {
     setDeleted(event);
     setEvents((items) => items.filter((item) => item.id !== event.id));
     setCurrentId(null);
+    changeScreen("events", null);
     setNotice({
       tone: "warning",
       text: `${event.name} was removed from this device.`,
     });
-    setScreen("events");
   }
   function undoDelete() {
     if (!deleted) return;
@@ -254,6 +343,7 @@ export default function Home() {
     setNotice({ tone: "success", text: "Event restored." });
   }
   function publishAvailability() {
+    if (!current || current.status !== "draft") return;
     updateCurrent((event) => ({ ...event, status: "open" }));
     setNotice({
       tone: "success",
@@ -275,7 +365,7 @@ export default function Home() {
     )
       return;
     setPendingShift(shift.id);
-    setNotice({ tone: "info", text: "Reserving your place…" });
+    setNotice({ tone: "info", text: "Sending your shift request…" });
     window.setTimeout(() => {
       if (nextOutcome === "failure") {
         setNextOutcome(null);
@@ -320,11 +410,11 @@ export default function Home() {
       setPendingShift(null);
       setNotice({
         tone: "success",
-        text: "Reserved. Waiting for manager confirmation.",
+        text: "Request sent. Waiting for manager confirmation.",
       });
     }, 450);
   }
-  function release(shift: Shift) {
+  function release(eventId: string, shift: Shift) {
     if (!online) {
       setNotice({
         tone: "danger",
@@ -332,24 +422,48 @@ export default function Home() {
       });
       return;
     }
-    updateCurrent((event) => ({
-      ...event,
-      shifts: event.shifts.map((item) =>
-        item.id === shift.id
+    setEvents((items) =>
+      items.map((event) =>
+        event.id === eventId
           ? {
-              ...item,
-              requests: item.requests.filter((name) => name !== previewStaff),
-              assignments: item.assignments.filter(
-                (name) => name !== previewStaff,
+              ...event,
+              shifts: event.shifts.map((item) =>
+                item.id === shift.id
+                  ? {
+                      ...item,
+                      requests: item.requests.filter(
+                        (name) => name !== previewStaff,
+                      ),
+                      assignments: item.assignments.filter(
+                        (name) => name !== previewStaff,
+                      ),
+                    }
+                  : item,
               ),
             }
-          : item,
+          : event,
       ),
-    }));
-    setNotice({ tone: "success", text: "Your reservation was released." });
+    );
+    setNotice({ tone: "success", text: "Your shift request was released." });
   }
   function toggleAssignment(shiftId: string, name: string) {
     if (current?.status === "locked") return;
+    const target = current?.shifts.find((shift) => shift.id === shiftId);
+    const alreadySelected = target?.assignments.includes(name) ?? false;
+    const overlap = current?.shifts.find(
+      (shift) =>
+        shift.id !== shiftId &&
+        shift.assignments.includes(name) &&
+        target &&
+        shiftsOverlap(target, shift),
+    );
+    if (!alreadySelected && overlap) {
+      setNotice({
+        tone: "warning",
+        text: `${name} is already assigned to an overlapping shift (${overlap.start}–${overlap.finish}).`,
+      });
+      return;
+    }
     updateCurrent((event) => ({
       ...event,
       shifts: event.shifts.map((shift) => {
@@ -366,6 +480,24 @@ export default function Home() {
     }));
   }
   function publishRoster() {
+    if (!current || current.status !== "open") {
+      setNotice({
+        tone: "warning",
+        text: "Open availability before publishing a roster.",
+      });
+      return;
+    }
+    const assignments = current.shifts.reduce(
+      (total, shift) => total + shift.assignments.length,
+      0,
+    );
+    if (!assignments) {
+      setNotice({
+        tone: "warning",
+        text: "Select at least one staff member before publishing the roster.",
+      });
+      return;
+    }
     updateCurrent((event) => ({
       ...event,
       rosterPublished: true,
@@ -381,9 +513,13 @@ export default function Home() {
     <main className="app-shell">
       <Header
         role={role}
-        onRoleChange={(nextRole) =>
-          changeScreen(nextRole === "manager" ? "events" : "staff-list")
-        }
+        onRoleChange={(nextRole) => {
+          if (nextRole === "manager") {
+            navigate(current ? "review" : "events");
+            return;
+          }
+          navigate(current?.status === "draft" ? "staff-list" : current ? "staff" : "staff-list");
+        }}
         infoOpen={infoOpen}
         setInfoOpen={setInfoOpen}
         resetOpen={resetOpen}
@@ -396,12 +532,15 @@ export default function Home() {
           setCurrentId(null);
           setDeleted(null);
           setResetOpen(false);
-          setScreen("events");
+          changeScreen("events", null);
           setNotice({ tone: "success", text: "Prototype data reset." });
         }}
       />
       {notice && (
-        <div className={`notice ${notice.tone}`} role="status">
+        <div
+          className={`notice ${notice.tone}`}
+          role={notice.tone === "danger" ? "alert" : "status"}
+        >
           <span>{notice.text}</span>
           {deleted &&
             notice.text === `${deleted.name} was removed from this device.` && (
@@ -419,15 +558,36 @@ export default function Home() {
           </button>
         </div>
       )}
+      {!online && ready && (
+        <div className="offline-banner" role="alert">
+          <strong>Offline</strong>
+          <span>Viewing saved data. Reconnect to request or release a shift.</span>
+        </div>
+      )}
       <AppNav
         role={role}
         screen={screen}
-        hasEvent={Boolean(current)}
-        openEvents={() => changeScreen(role === "manager" ? "events" : "staff-list")}
-        openRequests={() => changeScreen("requests")}
-        openRoster={() => changeScreen("roster")}
-        openMyShifts={() => changeScreen("my-shifts")}
+        eventStatus={current?.status ?? null}
+        openEvents={() => navigate(role === "manager" ? "events" : "staff-list")}
+        openRequests={() => navigate("requests")}
+        openRoster={() => navigate("roster")}
+        openMyShifts={() => navigate("my-shifts")}
       />
+      {pendingNavigation && (
+        <ConfirmationDialog
+          eyebrow="Unsaved changes"
+          title="Leave this event form?"
+          copy="Changes on this form have not been saved."
+          cancelLabel="Keep editing"
+          confirmLabel="Leave form"
+          onCancel={() => setPendingNavigation(null)}
+          onConfirm={() => {
+            const destination = pendingNavigation;
+            setPendingNavigation(null);
+            changeScreen(destination.screen, destination.eventId);
+          }}
+        />
+      )}
       {screen === "events" && (
         <Events
           events={events}
@@ -443,7 +603,7 @@ export default function Home() {
           editing={Boolean(editingId)}
           setDraft={setDraft}
           save={saveDraft}
-          cancel={() => changeScreen(editingId ? "review" : "events")}
+          cancel={() => navigate(editingId ? "review" : "events")}
         />
       )}
       {screen === "review" && current && (
@@ -493,6 +653,9 @@ export default function Home() {
       {screen === "my-shifts" && (
         <MyShifts
           events={events}
+          online={online}
+          release={release}
+          openEvent={(id) => changeScreen("staff", id)}
           openEvents={() => changeScreen("staff-list")}
         />
       )}
@@ -529,21 +692,24 @@ function Header({
     <>
       <header className="app-header">
         <span className="wordmark">StamStaff</span>
-        <div className="role-switch" role="group" aria-label="Preview role">
-          <button
-            type="button"
-            aria-pressed={role === "manager"}
-            onClick={() => onRoleChange("manager")}
-          >
-            Manager
-          </button>
-          <button
-            type="button"
-            aria-pressed={role === "staff"}
-            onClick={() => onRoleChange("staff")}
-          >
-            Staff
-          </button>
+        <div className="role-control">
+          <span>Preview as</span>
+          <div className="role-switch" role="group" aria-label="Preview role">
+            <button
+              type="button"
+              aria-pressed={role === "manager"}
+              onClick={() => onRoleChange("manager")}
+            >
+              Manager
+            </button>
+            <button
+              type="button"
+              aria-pressed={role === "staff"}
+              onClick={() => onRoleChange("staff")}
+            >
+              Staff
+            </button>
+          </div>
         </div>
         <button
           className="prototype-chip"
@@ -563,7 +729,7 @@ function Header({
               roster authority. Use fictional details only.
             </p>
             <details className="test-controls">
-              <summary>Test reservation states</summary>
+              <summary>Test request states</summary>
               <div>
                 <button
                   type="button"
@@ -620,7 +786,7 @@ function Header({
 function AppNav({
   role,
   screen,
-  hasEvent,
+  eventStatus,
   openEvents,
   openRequests,
   openRoster,
@@ -628,7 +794,7 @@ function AppNav({
 }: {
   role: "manager" | "staff";
   screen: Screen;
-  hasEvent: boolean;
+  eventStatus: StaffEvent["status"] | null;
   openEvents: () => void;
   openRequests: () => void;
   openRoster: () => void;
@@ -650,7 +816,7 @@ function AppNav({
           <button
             type="button"
             aria-current={screen === "requests" ? "page" : undefined}
-            disabled={!hasEvent}
+            disabled={!eventStatus || eventStatus === "draft"}
             onClick={openRequests}
           >
             Requests
@@ -658,7 +824,7 @@ function AppNav({
           <button
             type="button"
             aria-current={screen === "roster" ? "page" : undefined}
-            disabled={!hasEvent}
+            disabled={!eventStatus || eventStatus === "draft"}
             onClick={openRoster}
           >
             Roster
@@ -704,6 +870,68 @@ function PageHeading({
       </div>
       {action}
     </div>
+  );
+}
+
+function ConfirmationDialog({
+  eyebrow,
+  title,
+  copy,
+  note,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  eyebrow: string;
+  title: string;
+  copy: string;
+  note?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
+  useEffect(() => {
+    const element = dialog.current;
+    element?.showModal();
+    return () => element?.close();
+  }, []);
+  return (
+    <dialog
+      className="confirmation-dialog"
+      ref={dialog}
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onCancel();
+        }
+      }}
+    >
+      <div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h2 id={titleId}>{title}</h2>
+        <p id={descriptionId}>{copy}</p>
+        {note && <small>{note}</small>}
+      </div>
+      <div className="confirmation-actions">
+        <button className="button secondary" type="button" onClick={onCancel}>
+          {cancelLabel}
+        </button>
+        <button className="button primary" type="button" onClick={onConfirm}>
+          {confirmLabel}
+        </button>
+      </div>
+    </dialog>
   );
 }
 function Back({
@@ -756,8 +984,12 @@ function Events({
           </div>
         ) : events.length ? (
           <div className="event-list">
-            {events.map((event) => (
-              <article className="event-row" key={event.id}>
+            {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((event) => {
+              const places = event.shifts.reduce((total, shift) => total + shift.places, 0);
+              const requests = event.shifts.reduce((total, shift) => total + shift.requests.length, 0);
+              const assigned = event.shifts.reduce((total, shift) => total + shift.assignments.length, 0);
+              return (
+              <article className="event-row event-row-manager" key={event.id}>
                 <div>
                   <Status
                     value={
@@ -773,19 +1005,19 @@ function Events({
                     {formatDate(event.date)} · {event.location}
                   </p>
                 </div>
-                <div className="coverage">
-                  <strong>{event.shifts.length}</strong>
-                  <span>{event.shifts.length === 1 ? "shift" : "shifts"}</span>
+                <div className="event-metrics" aria-label="Event staffing summary">
+                  <span><strong>{requests}</strong> requests</span>
+                  <span><strong>{assigned}</strong> / {places} assigned</span>
                 </div>
                 <button
                   className="button secondary"
                   type="button"
                   onClick={() => open(event.id)}
                 >
-                  Open event
+                  Manage event
                 </button>
               </article>
-            ))}
+            );})}
           </div>
         ) : (
           <div className="empty-state">
@@ -916,7 +1148,7 @@ function CreateEvent({
                       />
                     </label>
                     <label>
-                      Places
+                      Staff needed
                       <input
                         type="number"
                         min={minimumPlaces}
@@ -941,7 +1173,7 @@ function CreateEvent({
                       id={`${shift.id}-capacity-help`}
                     >
                       Keep at least {minimumPlaces} places for existing
-                      reservations or assignments.
+                      requests or assignments.
                     </span>
                   )}
                   {draft.shifts.length > 1 &&
@@ -966,7 +1198,7 @@ function CreateEvent({
                     (shift.requests.length > 0 ||
                       shift.assignments.length > 0) && (
                       <span className="field-help">
-                        This shift has reservations or assignments and cannot be
+                        This shift has requests or assignments and cannot be
                         removed.
                       </span>
                     )}
@@ -991,7 +1223,7 @@ function CreateEvent({
               Cancel
             </button>
             <button className="button primary" type="submit">
-              {editing ? "Save changes" : "Create event"}
+              {editing ? "Save changes" : "Save draft"}
             </button>
           </div>
         </form>
@@ -1016,6 +1248,7 @@ function ManagerEvent({
   remove: () => void;
   back: () => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const totalRequests = event.shifts.reduce(
     (sum, shift) => sum + shift.requests.length,
     0,
@@ -1048,15 +1281,14 @@ function ManagerEvent({
               <div>
                 <h2>Shifts</h2>
                 <p>
-                  {totalRequests} reservation{" "}
-                  {totalRequests === 1 ? "request" : "requests"} so far
+                  {totalRequests} {totalRequests === 1 ? "shift request" : "shift requests"} so far
                 </p>
               </div>
               {event.status === "draft" && (
                 <button
                   className="button primary"
                   type="button"
-                  onClick={publish}
+                  onClick={() => setConfirmOpen(true)}
                 >
                   Open availability
                 </button>
@@ -1075,6 +1307,21 @@ function ManagerEvent({
               <ShiftSummary shift={shift} key={shift.id} />
             ))}
         </section>
+        {confirmOpen && (
+          <ConfirmationDialog
+            eyebrow="Open availability"
+            title={event.name}
+            copy={`${event.shifts.length} ${event.shifts.length === 1 ? "shift" : "shifts"} · ${event.shifts.reduce((total, shift) => total + shift.places, 0)} staff places`}
+            note="Prototype only · no staff will be notified"
+            cancelLabel="Cancel"
+            confirmLabel="Open availability"
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={() => {
+              publish();
+              setConfirmOpen(false);
+            }}
+          />
+        )}
         <div className="danger-zone">
           <button
             className="text-button"
@@ -1106,10 +1353,10 @@ function StaffEvents({
 }) {
   return (
     <section className="workspace staff-workspace">
-      <PageHeading title="Events" copy="Available shifts and reservations." />
+      <PageHeading title="Events" copy="Available shifts and your requests." />
       {events.length ? (
         <div className="event-list">
-          {events.map((event) => {
+          {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((event) => {
             const places =
               event.status === "open"
                 ? event.shifts.reduce(
@@ -1118,20 +1365,59 @@ function StaffEvents({
                     0,
                   )
                 : 0;
+            const mine = event.shifts.filter((shift) =>
+              shift.requests.includes(previewStaff),
+            );
+            const confirmed = mine.filter((shift) =>
+              shift.assignments.includes(previewStaff),
+            ).length;
             return (
               <article className="event-row" key={event.id}>
                 <div>
                   <Status
                     value={
-                      event.status === "open"
+                      event.rosterPublished
+                        ? "Roster published"
+                        : event.status === "open"
                         ? "Availability open"
-                        : "Reservations locked"
+                        : "Requests closed"
                     }
                   />
                   <h2>{event.name}</h2>
                   <p>
                     {formatDate(event.date)} · {event.location}
                   </p>
+                  {mine.length > 0 && (
+                    <p className="personal-state">
+                      {event.rosterPublished
+                        ? confirmed
+                          ? `${confirmed} confirmed ${confirmed === 1 ? "shift" : "shifts"}`
+                          : "Not assigned"
+                        : `${mine.length} pending ${mine.length === 1 ? "request" : "requests"}`}
+                    </p>
+                  )}
+                  <ul className="event-shift-preview" aria-label="Shift times">
+                    {event.shifts.slice(0, 2).map((shift) => {
+                      const remaining = Math.max(
+                        0,
+                        shift.places - shift.requests.length,
+                      );
+                      return (
+                        <li key={shift.id}>
+                          <span>{shift.start}–{shift.finish}</span>
+                          <span>
+                            {event.rosterPublished
+                              ? "Roster published"
+                              : event.status !== "open"
+                                ? "Closed"
+                                : remaining
+                                  ? `${remaining} open`
+                                  : "Full"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
                 <div className="coverage">
                   <strong>{places}</strong>
@@ -1170,9 +1456,10 @@ function StaffEventView({
   online: boolean;
   pendingShift: string | null;
   reserve: (shift: Shift) => void;
-  release: (shift: Shift) => void;
+  release: (eventId: string, shift: Shift) => void;
   events: () => void;
 }) {
+  const [releaseTarget, setReleaseTarget] = useState<Shift | null>(null);
   return (
     <section className="workspace staff-workspace">
         <Back onClick={events}>Events</Back>
@@ -1180,53 +1467,72 @@ function StaffEventView({
           title={event.name}
           copy={`${formatDate(event.date)} · ${event.location}`}
         />
-        {!online && (
-          <div className="inline-state danger" role="alert">
-            <strong>Offline</strong>
-            <span>Connect to reserve or release a place.</span>
-          </div>
-        )}
         <div className="shift-list">
           {event.shifts.map((shift) => {
             const mine = shift.requests.includes(previewStaff);
+            const assigned = shift.assignments.includes(previewStaff);
             const remaining = Math.max(0, shift.places - shift.requests.length);
             const locked = event.status !== "open";
+            const confirmed = event.rosterPublished && assigned;
+            const notAssigned = event.rosterPublished && mine && !assigned;
             return (
-              <article className="staff-shift" key={shift.id}>
+              <article
+                className={`staff-shift ${mine ? "staff-shift-mine" : ""}`}
+                key={shift.id}
+              >
                 <div>
                   <p className="shift-time">
                     {shift.start}–{shift.finish}
                   </p>
                   <p className="capacity-text">
-                    {remaining
+                    {confirmed
+                      ? "You are confirmed for this shift"
+                      : notAssigned
+                        ? "You were not assigned to this shift"
+                        : mine
+                          ? remaining
+                            ? `Request pending · ${remaining} other ${remaining === 1 ? "place" : "places"} open`
+                            : "Request pending · no other places open"
+                          : event.rosterPublished
+                            ? "Roster published · requests closed"
+                            : remaining
                       ? `${remaining} ${remaining === 1 ? "place" : "places"} remaining`
                       : "Full · no places remaining"}
                   </p>
                 </div>
                 <div className="shift-action">
-                  {mine && <Status value="Reserved · waiting for manager" />}
-                  {locked ? (
-                    <span className="state-copy">Reservations locked</span>
+                  {confirmed ? (
+                    <Status value="Confirmed shift" />
+                  ) : notAssigned ? (
+                    <Status value="Not assigned" />
+                  ) : locked ? (
+                    <span className="state-copy">Requests closed</span>
                   ) : mine ? (
-                    <button
-                      className="button secondary"
-                      type="button"
-                      disabled={!online}
-                      onClick={() => release(shift)}
-                    >
-                      Release my place
-                    </button>
+                    <>
+                      <Status value="Pending approval" />
+                      <button
+                        className="button secondary"
+                        type="button"
+                        disabled={!online}
+                        onClick={() => setReleaseTarget(shift)}
+                      >
+                        Release request
+                      </button>
+                    </>
                   ) : remaining ? (
-                    <button
-                      className="button primary"
-                      type="button"
-                      disabled={!online || pendingShift === shift.id}
-                      onClick={() => reserve(shift)}
-                    >
-                      {pendingShift === shift.id
-                        ? "Reserving…"
-                        : "Reserve a place"}
-                    </button>
+                    <div className="request-action">
+                      <button
+                        className="button primary"
+                        type="button"
+                        disabled={!online || pendingShift === shift.id}
+                        onClick={() => reserve(shift)}
+                      >
+                        {pendingShift === shift.id
+                          ? "Requesting…"
+                          : "Request this shift"}
+                      </button>
+                      <small>Manager confirmation required</small>
+                    </div>
                   ) : (
                     <span className="state-copy">This shift is full</span>
                   )}
@@ -1236,9 +1542,22 @@ function StaffEventView({
           })}
         </div>
         <p className="authority-note">
-          A reservation shows your availability. The manager confirms the final
-          roster.
+          A shift request holds availability. The manager confirms the final roster.
         </p>
+        {releaseTarget && (
+          <ConfirmationDialog
+            eyebrow="Release shift request"
+            title={event.name}
+            copy={`${formatDate(event.date)} · ${releaseTarget.start}–${releaseTarget.finish}`}
+            cancelLabel="Keep request"
+            confirmLabel="Release request"
+            onCancel={() => setReleaseTarget(null)}
+            onConfirm={() => {
+              release(event.id, releaseTarget);
+              setReleaseTarget(null);
+            }}
+          />
+        )}
     </section>
   );
 }
@@ -1258,17 +1577,16 @@ function Requests({
     (sum, shift) => sum + shift.assignments.length,
     0,
   );
+  const totalPlaces = event.shifts.reduce(
+    (sum, shift) => sum + shift.places,
+    0,
+  );
   return (
     <section className="workspace">
         <Back onClick={back}>{event.name}</Back>
         <PageHeading
           title="Reservation requests"
-          copy="Select final assignments by shift. Reservations do not assign staff automatically."
-          action={
-            <button className="button primary" type="button" onClick={roster}>
-              Review roster ({totalSelected})
-            </button>
-          }
+          copy={`${event.name} · ${formatDate(event.date)} · ${event.location}`}
         />
         <div className="request-groups">
           {event.shifts.map((shift) => (
@@ -1296,7 +1614,7 @@ function Requests({
                     <label className="person-row" key={name}>
                       <span>
                         <strong>{name}</strong>
-                        <small>Reserved · awaiting decision</small>
+                        <small>Requested · awaiting decision</small>
                       </span>
                       <input
                         type="checkbox"
@@ -1318,6 +1636,12 @@ function Requests({
             </section>
           ))}
         </div>
+        <div className="sticky-action">
+          <button className="button primary" type="button" onClick={roster}>
+            Review roster
+          </button>
+          <span>{totalSelected} of {totalPlaces} places assigned</span>
+        </div>
     </section>
   );
 }
@@ -1335,6 +1659,7 @@ function Roster({
   eventPage: () => void;
   staff: () => void;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const incomplete = event.shifts.some(
     (shift) => shift.assignments.length < shift.places,
   );
@@ -1396,11 +1721,31 @@ function Roster({
           </div>
         ) : (
           <div className="sticky-action">
-            <button className="button primary" type="button" onClick={publish}>
+            <button
+              className="button primary"
+              type="button"
+              disabled={!event.shifts.some((shift) => shift.assignments.length)}
+              onClick={() => setConfirmOpen(true)}
+            >
               Publish local roster
             </button>
             <span>Prototype only · no notifications</span>
           </div>
+        )}
+        {confirmOpen && (
+          <ConfirmationDialog
+            eyebrow="Publish roster"
+            title={event.name}
+            copy={`${event.shifts.reduce((total, shift) => total + shift.assignments.length, 0)} assigned · ${event.shifts.reduce((total, shift) => total + Math.max(0, shift.places - shift.assignments.length), 0)} open places`}
+            note="This locks the roster in the local prototype. No messages will be sent."
+            cancelLabel="Keep editing"
+            confirmLabel="Publish roster"
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={() => {
+              publish();
+              setConfirmOpen(false);
+            }}
+          />
         )}
     </section>
   );
@@ -1408,53 +1753,108 @@ function Roster({
 
 function MyShifts({
   events,
+  online,
+  release,
+  openEvent,
   openEvents,
 }: {
   events: StaffEvent[];
+  online: boolean;
+  release: (eventId: string, shift: Shift) => void;
+  openEvent: (eventId: string) => void;
   openEvents: () => void;
 }) {
-  const requested = events.flatMap((event) =>
-    event.shifts
-      .filter((shift) => shift.requests.includes(previewStaff))
-      .map((shift) => ({ event, shift })),
-  );
+  const [releaseTarget, setReleaseTarget] = useState<{
+    event: StaffEvent;
+    shift: Shift;
+  } | null>(null);
+  const requested = events
+    .flatMap((event) =>
+      event.shifts
+        .filter((shift) => shift.requests.includes(previewStaff))
+        .map((shift) => ({ event, shift })),
+    )
+    .sort((a, b) =>
+      `${a.event.date}-${a.shift.start}`.localeCompare(
+        `${b.event.date}-${b.shift.start}`,
+      ),
+    );
   return (
     <section className="workspace narrow">
         <PageHeading
           title="My shifts"
-          copy="Your reservations and confirmed shifts."
+          copy="Your pending requests and confirmed shifts."
         />
         {requested.length ? (
-          <div className="shift-list">
+          <div className="shift-list my-shift-list">
             {requested.map(({ event, shift }) => {
               const assigned = shift.assignments.includes(previewStaff);
+              const pending = !event.rosterPublished;
               return (
                 <article className="staff-shift" key={`${event.id}-${shift.id}`}>
                   <div>
+                    <span className="eyebrow">{event.name}</span>
                     <p className="shift-time">
                       {shift.start}–{shift.finish}
                     </p>
                     <p className="capacity-text">
-                      {event.name} · {formatDate(event.date)} · {event.location}
+                      {formatDate(event.date)} · {event.location}
                     </p>
                   </div>
-                  {event.rosterPublished ? (
-                    <Status value={assigned ? "Confirmed" : "Not assigned"} />
-                  ) : (
-                    <Status value="Reserved · waiting for manager" />
-                  )}
+                  <div className="shift-action">
+                    <Status
+                      value={
+                        event.rosterPublished
+                          ? assigned
+                            ? "Confirmed shift"
+                            : "Not assigned"
+                          : "Pending approval"
+                      }
+                    />
+                    {pending && (
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={!online}
+                        onClick={() => setReleaseTarget({ event, shift })}
+                      >
+                        Release request
+                      </button>
+                    )}
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => openEvent(event.id)}
+                    >
+                      View event
+                    </button>
+                  </div>
                 </article>
               );
             })}
           </div>
         ) : (
           <div className="empty-state compact">
-            <h2>No reservations yet</h2>
-            <p>Reserve an available place to see it here.</p>
+            <h2>No shift requests yet</h2>
+            <p>Request an available shift to see it here.</p>
             <button className="button primary" type="button" onClick={openEvents}>
               View events
             </button>
           </div>
+        )}
+        {releaseTarget && (
+          <ConfirmationDialog
+            eyebrow="Release shift request"
+            title={releaseTarget.event.name}
+            copy={`${formatDate(releaseTarget.event.date)} · ${releaseTarget.shift.start}–${releaseTarget.shift.finish}`}
+            cancelLabel="Keep request"
+            confirmLabel="Release request"
+            onCancel={() => setReleaseTarget(null)}
+            onConfirm={() => {
+              release(releaseTarget.event.id, releaseTarget.shift);
+              setReleaseTarget(null);
+            }}
+          />
         )}
     </section>
   );
@@ -1471,7 +1871,7 @@ function ShiftSummary({ shift }: { shift: Shift }) {
           {shift.places} {shift.places === 1 ? "place" : "places"}
         </span>
       </div>
-      <span>{shift.requests.length} reserved</span>
+      <span>{shift.requests.length} requested</span>
     </div>
   );
 }
@@ -1483,7 +1883,9 @@ function Status({ value }: { value: string }) {
       ? "success"
       : value.includes("Not assigned") || value === "Locked"
         ? "neutral"
-        : value.includes("open") || value.includes("Reserved")
+        : value.includes("open") ||
+            value.includes("Reserved") ||
+            value.includes("Pending")
           ? "info"
           : "warning";
   return <span className={`status ${tone}`}>{value}</span>;
