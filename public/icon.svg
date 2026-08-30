@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">StamStaff</title>
+  <rect width="512" height="512" rx="80" fill="#f8f9fd"/>
+  <path d="M92 112h328v12H92z" fill="#6c19ff"/>
+  <text x="256" y="250" fill="#13072f" font-family="Inter,system-ui,sans-serif" font-size="84" font-weight="800" text-anchor="middle">Stam</text>
+  <text x="256" y="338" fill="#13072f" font-family="Inter,system-ui,sans-serif" font-size="84" font-weight="800" text-anchor="middle">Staff</text>
+  <circle cx="390" cy="396" r="22" fill="#0ea5b7"/>
+</svg>
