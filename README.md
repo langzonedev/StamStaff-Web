@@ -28,12 +28,13 @@ Assume every file, commit, build artifact, browser bundle, and issue in this rep
 
 - Create, edit, delete and recover a local fictional event.
 - Add one or more capacity-limited shifts.
-- Open availability and preview the staff reservation experience.
+- Switch between the Manager and Staff app views at any time.
+- Open availability and reserve shifts from the Staff view.
 - Reserve or release a place, with pending, full, locked and offline states shown in context.
 - Select final assignments as the manager and publish a local roster outcome.
 - See a staff reservation remain visible as confirmed or not assigned.
 
-Changes persist in this browser until the prototype is reset. Staff preview controls are not authentication, and displayed capacity is not shared between devices.
+Changes persist in this browser until the prototype is reset. The role switch is not authentication, and displayed capacity is not shared between devices.
 
 ## Development
 

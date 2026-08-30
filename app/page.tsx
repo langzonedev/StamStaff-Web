@@ -106,6 +106,13 @@ export default function Home() {
   const [nextOutcome, setNextOutcome] = useState<"conflict" | "failure" | null>(
     null,
   );
+  const role: "manager" | "staff" = [
+    "staff-list",
+    "staff",
+    "my-shifts",
+  ].includes(screen)
+    ? "staff"
+    : "manager";
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -373,6 +380,10 @@ export default function Home() {
   return (
     <main className="app-shell">
       <Header
+        role={role}
+        onRoleChange={(nextRole) =>
+          changeScreen(nextRole === "manager" ? "events" : "staff-list")
+        }
         infoOpen={infoOpen}
         setInfoOpen={setInfoOpen}
         resetOpen={resetOpen}
@@ -408,6 +419,15 @@ export default function Home() {
           </button>
         </div>
       )}
+      <AppNav
+        role={role}
+        screen={screen}
+        hasEvent={Boolean(current)}
+        openEvents={() => changeScreen(role === "manager" ? "events" : "staff-list")}
+        openRequests={() => changeScreen("requests")}
+        openRoster={() => changeScreen("roster")}
+        openMyShifts={() => changeScreen("my-shifts")}
+      />
       {screen === "events" && (
         <Events
           events={events}
@@ -437,12 +457,10 @@ export default function Home() {
           back={() => changeScreen("events")}
         />
       )}
-      {screen === "staff-list" && current && (
+      {screen === "staff-list" && (
         <StaffEvents
-          event={current}
-          open={() => changeScreen("staff")}
-          manager={() => changeScreen("review")}
-          myShifts={() => changeScreen("my-shifts")}
+          events={events.filter((event) => event.status !== "draft")}
+          open={(id) => changeScreen("staff", id)}
         />
       )}
       {screen === "staff" && current && (
@@ -453,8 +471,6 @@ export default function Home() {
           reserve={reserve}
           release={release}
           events={() => changeScreen("staff-list")}
-          manager={() => changeScreen("review")}
-          myShifts={() => changeScreen("my-shifts")}
         />
       )}
       {screen === "requests" && current && (
@@ -474,12 +490,10 @@ export default function Home() {
           staff={() => changeScreen("my-shifts")}
         />
       )}
-      {screen === "my-shifts" && current && (
+      {screen === "my-shifts" && (
         <MyShifts
-          event={current}
-          back={() => changeScreen("staff")}
-          events={() => changeScreen("staff-list")}
-          manager={() => changeScreen("review")}
+          events={events}
+          openEvents={() => changeScreen("staff-list")}
         />
       )}
       <footer className="app-footer">
@@ -491,6 +505,8 @@ export default function Home() {
 }
 
 function Header({
+  role,
+  onRoleChange,
   infoOpen,
   setInfoOpen,
   resetOpen,
@@ -499,6 +515,8 @@ function Header({
   setNextOutcome,
   reset,
 }: {
+  role: "manager" | "staff";
+  onRoleChange: (role: "manager" | "staff") => void;
   infoOpen: boolean;
   setInfoOpen: (value: boolean) => void;
   resetOpen: boolean;
@@ -511,6 +529,22 @@ function Header({
     <>
       <header className="app-header">
         <span className="wordmark">StamStaff</span>
+        <div className="role-switch" role="group" aria-label="Preview role">
+          <button
+            type="button"
+            aria-pressed={role === "manager"}
+            onClick={() => onRoleChange("manager")}
+          >
+            Manager
+          </button>
+          <button
+            type="button"
+            aria-pressed={role === "staff"}
+            onClick={() => onRoleChange("staff")}
+          >
+            Staff
+          </button>
+        </div>
         <button
           className="prototype-chip"
           type="button"
@@ -583,39 +617,72 @@ function Header({
   );
 }
 
-function ManagerNav({ active }: { active: "events" | "requests" | "roster" }) {
+function AppNav({
+  role,
+  screen,
+  hasEvent,
+  openEvents,
+  openRequests,
+  openRoster,
+  openMyShifts,
+}: {
+  role: "manager" | "staff";
+  screen: Screen;
+  hasEvent: boolean;
+  openEvents: () => void;
+  openRequests: () => void;
+  openRoster: () => void;
+  openMyShifts: () => void;
+}) {
+  const managerEventActive = ["events", "create", "review"].includes(screen);
+  const staffEventActive = ["staff-list", "staff"].includes(screen);
   return (
-    <ol className="task-nav" aria-label="Manager workflow">
-      <li
-        className={active === "events" ? "active" : ""}
-        aria-current={active === "events" ? "step" : undefined}
+    <nav className="app-nav" aria-label={`${role} navigation`}>
+      <button
+        type="button"
+        aria-current={(managerEventActive || staffEventActive) ? "page" : undefined}
+        onClick={openEvents}
       >
-        <span>1</span> Events
-      </li>
-      <li
-        className={active === "requests" ? "active" : ""}
-        aria-current={active === "requests" ? "step" : undefined}
-      >
-        <span>2</span> Requests
-      </li>
-      <li
-        className={active === "roster" ? "active" : ""}
-        aria-current={active === "roster" ? "step" : undefined}
-      >
-        <span>3</span> Roster
-      </li>
-    </ol>
+        Events
+      </button>
+      {role === "manager" ? (
+        <>
+          <button
+            type="button"
+            aria-current={screen === "requests" ? "page" : undefined}
+            disabled={!hasEvent}
+            onClick={openRequests}
+          >
+            Requests
+          </button>
+          <button
+            type="button"
+            aria-current={screen === "roster" ? "page" : undefined}
+            disabled={!hasEvent}
+            onClick={openRoster}
+          >
+            Roster
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          aria-current={screen === "my-shifts" ? "page" : undefined}
+          onClick={openMyShifts}
+        >
+          My shifts
+        </button>
+      )}
+    </nav>
   );
 }
 function PageHeading({
   id,
-  kicker,
   title,
   copy,
   action,
 }: {
   id?: string;
-  kicker: string;
   title: string;
   copy: string;
   action?: React.ReactNode;
@@ -630,7 +697,6 @@ function PageHeading({
   return (
     <div className="page-heading">
       <div>
-        <p className="kicker">{kicker}</p>
         <h1 id={headingId} tabIndex={-1}>
           {title}
         </h1>
@@ -668,13 +734,10 @@ function Events({
   open: (id: string) => void;
 }) {
   return (
-    <>
-      <ManagerNav active="events" />
-      <section className="workspace" aria-labelledby="events-title">
+    <section className="workspace" aria-labelledby="events-title">
         <PageHeading
-          kicker="Manager workspace"
           title="Events"
-          copy="Create an event, offer shift places, then review who is available."
+          copy="Create and manage event shifts."
           action={
             events.length ? (
               <button
@@ -732,10 +795,7 @@ function Events({
               <span />
             </div>
             <h2>No events yet</h2>
-            <p>
-              Start with the event basics and one shift. Add detail as the team
-              needs it.
-            </p>
+            <p>Create an event to publish shift availability.</p>
             <button
               className="button primary"
               type="button"
@@ -748,8 +808,7 @@ function Events({
             </button>
           </div>
         )}
-      </section>
-    </>
+    </section>
   );
 }
 
@@ -781,14 +840,12 @@ function CreateEvent({
     }));
   }
   return (
-    <>
-      <ManagerNav active="events" />
-      <section className="workspace narrow" aria-labelledby="create-title">
+    <section className="workspace narrow" aria-labelledby="create-title">
         <Back onClick={cancel}>{editing ? draft.name : "Events"}</Back>
         <PageHeading
-          kicker={editing ? "Edit event" : "New event"}
-          title="Event details"
-          copy="Only add what the team needs to reserve a place."
+          id="create-title"
+          title={editing ? "Edit event" : "Create event"}
+          copy="Event details and shift capacity."
         />
         <form className="event-form" onSubmit={save}>
           <fieldset className="form-section">
@@ -934,12 +991,11 @@ function CreateEvent({
               Cancel
             </button>
             <button className="button primary" type="submit">
-              {editing ? "Save changes" : "Review event"}
+              {editing ? "Save changes" : "Create event"}
             </button>
           </div>
         </form>
-      </section>
-    </>
+    </section>
   );
 }
 
@@ -965,28 +1021,29 @@ function ManagerEvent({
     0,
   );
   return (
-    <>
-      <ManagerNav active="events" />
-      <section className="workspace">
+    <section className="workspace">
         <Back onClick={back}>Events</Back>
         <PageHeading
-          kicker="Event"
           title={event.name}
           copy={`${formatDate(event.date)} · ${event.location}`}
           action={
-            <Status
-              value={
-                event.status === "open"
-                  ? "Availability open"
-                  : event.status === "locked"
-                    ? "Locked"
-                    : "Draft"
-              }
-            />
+            <div className="heading-actions">
+              <Status
+                value={
+                  event.status === "open"
+                    ? "Availability open"
+                    : event.status === "locked"
+                      ? "Locked"
+                      : "Draft"
+                }
+              />
+              <button className="button secondary" type="button" onClick={preview}>
+                View as staff
+              </button>
+            </div>
           }
         />
-        <div className="event-hub">
-          <section className="panel">
+        <section className="panel">
             <div className="panel-heading">
               <div>
                 <h2>Shifts</h2>
@@ -1004,70 +1061,20 @@ function ManagerEvent({
                   Open availability
                 </button>
               )}
+              {event.status === "open" && (
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={requests}
+                >
+                  Requests ({totalRequests})
+                </button>
+              )}
             </div>
             {event.shifts.map((shift) => (
               <ShiftSummary shift={shift} key={shift.id} />
             ))}
-          </section>
-          <aside className="next-panel">
-            <p className="kicker">Next action</p>
-            {event.status === "draft" ? (
-              <>
-                <h2>Check the staff view</h2>
-                <p>
-                  See exactly what staff will use before opening availability.
-                </p>
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={preview}
-                >
-                  Preview staff view
-                </button>
-              </>
-            ) : event.status === "locked" ? (
-              <>
-                <h2>Roster published</h2>
-                <p>
-                  Assignments and event details are locked in this local
-                  preview.
-                </p>
-                <button
-                  className="button secondary"
-                  type="button"
-                  onClick={preview}
-                >
-                  Preview staff view
-                </button>
-              </>
-            ) : (
-              <>
-                <h2>{totalRequests ? "Review requests" : "Share the event"}</h2>
-                <p>
-                  {totalRequests
-                    ? "Reservations are provisional until you select the final roster."
-                    : "Preview the reservation experience while you wait for responses."}
-                </p>
-                <button
-                  className="button primary"
-                  type="button"
-                  onClick={totalRequests ? requests : preview}
-                >
-                  {totalRequests ? "Review requests" : "Preview staff view"}
-                </button>
-                {totalRequests > 0 && (
-                  <button
-                    className="button secondary"
-                    type="button"
-                    onClick={preview}
-                  >
-                    Preview staff view
-                  </button>
-                )}
-              </>
-            )}
-          </aside>
-        </div>
+        </section>
         <div className="danger-zone">
           <button
             className="text-button"
@@ -1086,71 +1093,68 @@ function ManagerEvent({
             {event.status === "locked" ? "Deletion locked" : "Delete event"}
           </button>
         </div>
-      </section>
-    </>
+    </section>
   );
 }
 
 function StaffEvents({
-  event,
+  events,
   open,
-  manager,
-  myShifts,
 }: {
-  event: StaffEvent;
-  open: () => void;
-  manager: () => void;
-  myShifts: () => void;
+  events: StaffEvent[];
+  open: (id: string) => void;
 }) {
-  const places =
-    event.status === "open"
-      ? event.shifts.reduce(
-          (sum, shift) =>
-            sum + Math.max(0, shift.places - shift.requests.length),
-          0,
-        )
-      : 0;
   return (
-    <>
-      <nav className="staff-nav" aria-label="Staff preview">
-        <span>Staff preview</span>
-        <button type="button" onClick={myShifts}>
-          My shifts
-        </button>
-        <button type="button" onClick={manager}>
-          Exit preview
-        </button>
-      </nav>
-      <section className="workspace staff-workspace">
-        <PageHeading
-          kicker="Staff preview"
-          title="Available events"
-          copy="Choose an event to see the shifts with places open."
-        />
-        <article className="event-row">
-          <div>
-            <Status
-              value={
-                event.status === "open"
-                  ? "Availability open"
-                  : "Reservations locked"
-              }
-            />
-            <h2>{event.name}</h2>
-            <p>
-              {formatDate(event.date)} · {event.location}
-            </p>
-          </div>
-          <div className="coverage">
-            <strong>{places}</strong>
-            <span>places open</span>
-          </div>
-          <button className="button primary" type="button" onClick={open}>
-            View shifts
-          </button>
-        </article>
-      </section>
-    </>
+    <section className="workspace staff-workspace">
+      <PageHeading title="Events" copy="Available shifts and reservations." />
+      {events.length ? (
+        <div className="event-list">
+          {events.map((event) => {
+            const places =
+              event.status === "open"
+                ? event.shifts.reduce(
+                    (sum, shift) =>
+                      sum + Math.max(0, shift.places - shift.requests.length),
+                    0,
+                  )
+                : 0;
+            return (
+              <article className="event-row" key={event.id}>
+                <div>
+                  <Status
+                    value={
+                      event.status === "open"
+                        ? "Availability open"
+                        : "Reservations locked"
+                    }
+                  />
+                  <h2>{event.name}</h2>
+                  <p>
+                    {formatDate(event.date)} · {event.location}
+                  </p>
+                </div>
+                <div className="coverage">
+                  <strong>{places}</strong>
+                  <span>places open</span>
+                </div>
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => open(event.id)}
+                >
+                  View shifts
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="empty-state compact">
+          <h2>No events available</h2>
+          <p>Published events will appear here.</p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1161,8 +1165,6 @@ function StaffEventView({
   reserve,
   release,
   events,
-  manager,
-  myShifts,
 }: {
   event: StaffEvent;
   online: boolean;
@@ -1170,27 +1172,11 @@ function StaffEventView({
   reserve: (shift: Shift) => void;
   release: (shift: Shift) => void;
   events: () => void;
-  manager: () => void;
-  myShifts: () => void;
 }) {
   return (
-    <>
-      <nav className="staff-nav" aria-label="Staff preview">
-        <span>Staff preview</span>
-        <button type="button" onClick={events}>
-          Events
-        </button>
-        <button type="button" onClick={myShifts}>
-          My shifts
-        </button>
-        <button type="button" onClick={manager}>
-          Exit preview
-        </button>
-      </nav>
-      <section className="workspace staff-workspace">
-        <Back onClick={events}>Available events</Back>
+    <section className="workspace staff-workspace">
+        <Back onClick={events}>Events</Back>
         <PageHeading
-          kicker="Available event"
           title={event.name}
           copy={`${formatDate(event.date)} · ${event.location}`}
         />
@@ -1253,8 +1239,7 @@ function StaffEventView({
           A reservation shows your availability. The manager confirms the final
           roster.
         </p>
-      </section>
-    </>
+    </section>
   );
 }
 
@@ -1274,12 +1259,9 @@ function Requests({
     0,
   );
   return (
-    <>
-      <ManagerNav active="requests" />
-      <section className="workspace">
+    <section className="workspace">
         <Back onClick={back}>{event.name}</Back>
         <PageHeading
-          kicker="Manager workspace"
           title="Reservation requests"
           copy="Select final assignments by shift. Reservations do not assign staff automatically."
           action={
@@ -1336,8 +1318,7 @@ function Requests({
             </section>
           ))}
         </div>
-      </section>
-    </>
+    </section>
   );
 }
 
@@ -1358,14 +1339,11 @@ function Roster({
     (shift) => shift.assignments.length < shift.places,
   );
   return (
-    <>
-      <ManagerNav active="roster" />
-      <section className="workspace narrow">
+    <section className="workspace narrow">
         <Back onClick={event.rosterPublished ? eventPage : back}>
           {event.rosterPublished ? event.name : "Requests"}
         </Back>
         <PageHeading
-          kicker="Final review"
           title="Roster"
           copy={`${event.name} · ${formatDate(event.date)}`}
         />
@@ -1424,55 +1402,40 @@ function Roster({
             <span>Prototype only · no notifications</span>
           </div>
         )}
-      </section>
-    </>
+    </section>
   );
 }
 
 function MyShifts({
-  event,
-  back,
   events,
-  manager,
+  openEvents,
 }: {
-  event: StaffEvent;
-  back: () => void;
-  events: () => void;
-  manager: () => void;
+  events: StaffEvent[];
+  openEvents: () => void;
 }) {
-  const requested = event.shifts.filter((shift) =>
-    shift.requests.includes(previewStaff),
+  const requested = events.flatMap((event) =>
+    event.shifts
+      .filter((shift) => shift.requests.includes(previewStaff))
+      .map((shift) => ({ event, shift })),
   );
   return (
-    <>
-      <nav className="staff-nav" aria-label="Staff preview">
-        <span>Staff preview</span>
-        <button type="button" onClick={events}>
-          Events
-        </button>
-        <button type="button" onClick={manager}>
-          Exit preview
-        </button>
-      </nav>
-      <section className="workspace narrow">
-        <Back onClick={back}>Available event</Back>
+    <section className="workspace narrow">
         <PageHeading
-          kicker="Staff preview"
           title="My shifts"
-          copy={event.name}
+          copy="Your reservations and confirmed shifts."
         />
         {requested.length ? (
           <div className="shift-list">
-            {requested.map((shift) => {
+            {requested.map(({ event, shift }) => {
               const assigned = shift.assignments.includes(previewStaff);
               return (
-                <article className="staff-shift" key={shift.id}>
+                <article className="staff-shift" key={`${event.id}-${shift.id}`}>
                   <div>
                     <p className="shift-time">
                       {shift.start}–{shift.finish}
                     </p>
                     <p className="capacity-text">
-                      {formatDate(event.date)} · {event.location}
+                      {event.name} · {formatDate(event.date)} · {event.location}
                     </p>
                   </div>
                   {event.rosterPublished ? (
@@ -1488,13 +1451,12 @@ function MyShifts({
           <div className="empty-state compact">
             <h2>No reservations yet</h2>
             <p>Reserve an available place to see it here.</p>
-            <button className="button primary" type="button" onClick={back}>
-              View available event
+            <button className="button primary" type="button" onClick={openEvents}>
+              View events
             </button>
           </div>
         )}
-      </section>
-    </>
+    </section>
   );
 }
 

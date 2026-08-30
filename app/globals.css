@@ -94,7 +94,7 @@ input:focus-visible {
   border-radius: 50%;
   background: var(--wash);
 }
-.task-nav {
+.app-nav {
   min-height: 52px;
   padding: 0 max(20px, calc((100vw - var(--content)) / 2));
   display: flex;
@@ -103,7 +103,7 @@ input:focus-visible {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
-.task-nav button {
+.app-nav button {
   position: relative;
   min-width: 68px;
   min-height: 44px;
@@ -113,10 +113,10 @@ input:focus-visible {
   font-weight: 700;
   cursor: pointer;
 }
-.task-nav button.active {
+.app-nav button[aria-current="page"] {
   color: var(--ink);
 }
-.task-nav button.active::after {
+.app-nav button[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 0;
@@ -125,7 +125,7 @@ input:focus-visible {
   height: 3px;
   background: var(--action);
 }
-.task-nav button:disabled {
+.app-nav button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -355,7 +355,7 @@ h2 {
     height: 60px;
     padding: 0 16px;
   }
-  .task-nav {
+  .app-nav {
     padding: 0 16px;
   }
   .workspace,
