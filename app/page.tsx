@@ -8,6 +8,7 @@ import {
   previewStaffId,
   prototypeStorageKey,
   readPrototypeEvents,
+  setMemberAvailability,
   visibleAssignments,
   writePrototypeEvents,
   type Shift,
@@ -332,12 +333,12 @@ export default function Home() {
       draft.shifts.some(
         (shift) =>
           shift.places <
-          Math.max(shift.requests.length, shift.assignments.length),
+          Math.max(1, shift.assignments.length),
       )
     ) {
       setNotice({
         tone: "danger",
-        text: "A shift cannot have fewer places than its existing requests or assignments.",
+        text: "Staff needed cannot be lower than the number already assigned.",
       });
       return;
     }
@@ -394,76 +395,40 @@ export default function Home() {
       text: "Availability is open in this local preview. No messages were sent.",
     });
   }
-  function reserve(shift: Shift) {
+  function markAvailable(shift: Shift) {
     if (!online) {
-      setNotice({
-        tone: "danger",
-        text: "You are offline. Connect before reserving a place.",
-      });
+      setNotice({ tone: "danger", text: "You are offline. Connect before updating availability." });
       return;
     }
-    if (
-      !current ||
-      current.status !== "open" ||
-      current.availabilityClosed ||
-      shift.requests.length >= shift.places
-    )
-      return;
+    if (!current || current.status !== "open" || current.availabilityClosed ||
+        shift.requests.includes(previewStaffId) || pendingShift) return;
     setPendingShift(shift.id);
-    setNotice({ tone: "info", text: "Sending your shift request…" });
+    setNotice({ tone: "info", text: "Saving your availability…" });
     window.setTimeout(() => {
-      if (nextOutcome === "failure") {
+      setPendingShift(null);
+      if (nextOutcome === "failure" || !navigator.onLine) {
         setNextOutcome(null);
-        setPendingShift(null);
-        setNotice({
-          tone: "danger",
-          text: "Reservation was not saved. Your place was not reserved—please try again.",
-        });
+        setNotice({ tone: "danger", text: "Availability was not saved. Please try again when connected." });
         return;
       }
       if (nextOutcome === "conflict") {
-        updateCurrent((event) => ({
-          ...event,
-          shifts: event.shifts.map((item) =>
-            item.id === shift.id
-              ? {
-                  ...item,
-                  requests: [...item.requests, "member-other"].slice(
-                    0,
-                    item.places,
-                  ),
-                }
-              : item,
-          ),
-        }));
         setNextOutcome(null);
-        setPendingShift(null);
-        setNotice({
-          tone: "warning",
-          text: "That place was just reserved by someone else. Capacity has been refreshed.",
-        });
+        setNotice({ tone: "warning", text: "The event changed before availability was saved. Review the shift and try again." });
         return;
       }
-      updateCurrent((event) => ({
-        ...event,
-        shifts: event.shifts.map((item) =>
-          item.id === shift.id
-            ? { ...item, requests: [...item.requests, previewStaffId] }
-            : item,
-        ),
-      }));
-      setPendingShift(null);
-      setNotice({
-        tone: "success",
-        text: "Request sent. Waiting for manager confirmation.",
-      });
+      setEvents((items) => items.map((event) =>
+        event.id === current.id
+          ? setMemberAvailability(event, shift.id, previewStaffId, true)
+          : event,
+      ));
+      setNotice({ tone: "success", text: "Availability saved. The manager will choose the final roster." });
     }, 450);
   }
   function release(eventId: string, shift: Shift) {
     if (!online) {
       setNotice({
         tone: "danger",
-        text: "You are offline. Connect before releasing a place.",
+        text: "You are offline. Connect before changing availability.",
       });
       return;
     }
@@ -471,7 +436,7 @@ export default function Home() {
     if (!targetEvent || targetEvent.status !== "open" || targetEvent.availabilityClosed) {
       setNotice({
         tone: "warning",
-        text: "Requests are closed for this event. Contact the manager if your availability changed.",
+        text: "Availability is closed for this event. Contact the manager if your availability changed.",
       });
       requestAnimationFrame(() =>
         document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
@@ -500,7 +465,7 @@ export default function Home() {
           : event,
       ),
     );
-    setNotice({ tone: "success", text: "Your shift request was released." });
+    setNotice({ tone: "success", text: "Your availability was withdrawn." });
   }
   function toggleAssignment(shiftId: string, name: string) {
     if (current?.status === "locked" && !current.managerEditMode) return;
@@ -547,7 +512,7 @@ export default function Home() {
     ) {
       setNotice({
         tone: "warning",
-        text: "Close requests before publishing the roster.",
+        text: "Close availability before publishing the roster.",
       });
       requestAnimationFrame(() =>
         document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
@@ -605,7 +570,7 @@ export default function Home() {
     updateCurrent((event) => ({ ...event, availabilityClosed: true }));
     setNotice({
       tone: "success",
-      text: "Requests closed in this local preview. Staff can still view their existing requests.",
+      text: "Availability closed in this local preview. Staff can still view their submitted availability.",
     });
   }
   function reopenAvailability() {
@@ -693,7 +658,7 @@ export default function Home() {
       {!online && ready && (
         <div className="offline-banner" role="alert">
           <strong>Offline</strong>
-          <span>Viewing saved data. Reconnect to request or release a shift.</span>
+          <span>Viewing saved data. Reconnect to update availability.</span>
         </div>
       )}
       {pendingNavigation && (
@@ -710,6 +675,9 @@ export default function Home() {
             changeScreen(destination.screen, destination.eventId);
           }}
         />
+      )}
+      {current && ["review", "staff", "requests", "roster"].includes(screen) && (
+        <RosterSteps event={current} />
       )}
       {screen === "events" && (
         <Events
@@ -753,7 +721,7 @@ export default function Home() {
           event={current}
           online={online}
           pendingShift={pendingShift}
-          reserve={reserve}
+          markAvailable={markAvailable}
           release={release}
           events={() => changeScreen("staff-list")}
         />
@@ -871,7 +839,7 @@ function Header({
               roster authority. Use fictional details only.
             </p>
             <details className="test-controls">
-              <summary>Test request states</summary>
+              <summary>Test availability saving</summary>
               <div>
                 <button
                   type="button"
@@ -963,7 +931,7 @@ function AppNav({
             onClick={openRequests}
           >
             <span className="nav-icon" aria-hidden="true">＋</span>
-            <span>Requests</span>
+            <span>Availability</span>
           </button>
           <button
             type="button"
@@ -1168,7 +1136,7 @@ function Events({
                 <small>{events.filter((event) => event.status === "open" && !event.availabilityClosed).length} collecting availability</small>
               </article>
               <article>
-                <span>Requests</span>
+                <span>Availability</span>
                 <strong>{totalRequests}</strong>
                 <small>Across all upcoming shifts</small>
               </article>
@@ -1196,7 +1164,9 @@ function Events({
                   : shift.assignments.length),
                 0,
               );
-              const phase = event.rosterPublished || event.availabilityClosed
+              const phase = event.rosterPublished
+                ? 4
+                : event.availabilityClosed
                 ? 3
                 : event.status === "open"
                   ? 2
@@ -1221,14 +1191,15 @@ function Events({
                   <p>
                     {formatEventDates(event)} · {event.location}
                   </p>
-                  <div className="event-phase" aria-label={`Step ${phase} of 3`}>
+                  <div className="event-phase" aria-label={`Step ${phase} of 4`}>
                     <span className={phase >= 1 ? "complete" : ""}>Plan</span>
-                    <span className={phase >= 2 ? "complete" : ""}>Requests</span>
-                    <span className={phase >= 3 ? "complete" : ""}>Roster</span>
+                    <span className={phase >= 2 ? "complete" : ""}>Availability</span>
+                    <span className={phase >= 3 ? "complete" : ""}>Assign</span>
+                    <span className={phase >= 4 ? "complete" : ""}>Publish</span>
                   </div>
                 </div>
                 <div className="event-metrics" aria-label="Event staffing summary">
-                  <span><strong>{requests}</strong> requests</span>
+                  <span><strong>{requests}</strong> availability responses</span>
                   <span><strong>{assigned}</strong> / {places} assigned</span>
                 </div>
                 <button
@@ -1447,14 +1418,13 @@ function CreateEvent({
               <div className="inline-state warning" role="status">
                 <strong>Shift schedule protected</strong>
                 <span>
-                  This event has requests or assignments. Names and location can still be edited, but dates and times cannot move people silently.
+                  This event has availability or assignments. Names and location can still be edited, but dates and times cannot move people silently.
                 </span>
               </div>
             )}
             {draft.shifts.map((shift, index) => {
               const minimumPlaces = Math.max(
                 1,
-                shift.requests.length,
                 shift.assignments.length,
               );
               const capacityInvalid = shift.places < minimumPlaces;
@@ -1533,8 +1503,7 @@ function CreateEvent({
                       className={capacityInvalid ? "field-error" : "field-help"}
                       id={`${shift.id}-capacity-help`}
                     >
-                      Keep at least {minimumPlaces} places for existing
-                      requests or assignments.
+                      Keep at least {minimumPlaces} places for existing assignments.
                     </span>
                   )}
                   {dayInvalid && (
@@ -1576,7 +1545,7 @@ function CreateEvent({
                     (shift.requests.length > 0 ||
                       shift.assignments.length > 0) && (
                       <span className="field-help">
-                        This shift has requests or assignments and cannot be
+                        This shift has availability or assignments and cannot be
                         removed.
                       </span>
                     )}
@@ -1679,9 +1648,9 @@ function ManagerEvent({
             <small>{event.shifts.length} scheduled {event.shifts.length === 1 ? "shift" : "shifts"}</small>
           </article>
           <article>
-            <span>Requests</span>
+            <span>Availability</span>
             <strong>{totalRequests}</strong>
-            <small>{event.status === "open" && !event.availabilityClosed ? "Availability is open" : "Requests are closed"}</small>
+            <small>{event.status === "open" && !event.availabilityClosed ? "Availability is open" : "Availability is closed"}</small>
           </article>
           <article className={totalAssigned < totalPlaces ? "needs-attention" : ""}>
             <span>Roster coverage</span>
@@ -1694,7 +1663,7 @@ function ManagerEvent({
               <div>
                 <h2>Shifts</h2>
                 <p>
-                  {totalRequests} {totalRequests === 1 ? "shift request" : "shift requests"} so far
+                  {totalRequests} {totalRequests === 1 ? "availability response" : "availability responses"} so far
                 </p>
               </div>
               {event.status === "draft" && (
@@ -1712,7 +1681,7 @@ function ManagerEvent({
                   type="button"
                   onClick={requests}
                 >
-                  {event.availabilityClosed ? "Continue roster" : `Requests (${totalRequests})`}
+                  {event.availabilityClosed ? "Continue roster" : `Review availability (${totalRequests})`}
                 </button>
               )}
               {event.status === "locked" && (
@@ -1741,7 +1710,7 @@ function ManagerEvent({
         </section>
         {event.status === "open" && event.availabilityClosed && (
           <div className="event-secondary-action">
-            <span>Staff requests are closed while you make final assignments.</span>
+            <span>Staff availability is closed while you make final assignments.</span>
             <button className="text-button" type="button" onClick={reopen}>
               Reopen availability
             </button>
@@ -1802,10 +1771,7 @@ function StaffEvents({
 }) {
   const openPlaces = events.reduce(
     (sum, event) => sum + (event.status === "open" && !event.availabilityClosed
-      ? event.shifts.reduce(
-          (eventSum, shift) => eventSum + Math.max(0, shift.places - shift.requests.length),
-          0,
-        )
+      ? event.shifts.length
       : 0),
     0,
   );
@@ -1821,19 +1787,19 @@ function StaffEvents({
   );
   return (
     <section className="workspace staff-workspace">
-      <PageHeading title="Your work" copy="Upcoming events, requests and confirmed shifts." />
+      <PageHeading title="Your work" copy="Upcoming events, your availability and confirmed shifts." />
       {events.length ? (
         <>
           <div className="overview-metrics staff-overview" aria-label="Your shift overview">
             <article>
-              <span>Places open</span>
+              <span>Shifts accepting availability</span>
               <strong>{openPlaces}</strong>
               <small>Across upcoming events</small>
             </article>
             <article>
-              <span>Pending</span>
-              <strong>{Math.max(0, requested - confirmed)}</strong>
-              <small>Waiting for manager confirmation</small>
+              <span>Availability submitted</span>
+              <strong>{requested}</strong>
+              <small>Awaiting the published roster</small>
             </article>
             <article className="confirmed-metric">
               <span>Confirmed</span>
@@ -1851,11 +1817,7 @@ function StaffEvents({
           {[...events].sort((a, b) => a.date.localeCompare(b.date)).map((event) => {
             const places =
               event.status === "open" && !event.availabilityClosed
-                ? event.shifts.reduce(
-                    (sum, shift) =>
-                      sum + Math.max(0, shift.places - shift.requests.length),
-                    0,
-                  )
+                ? event.shifts.length
                 : 0;
             const mine = event.shifts.filter((shift) =>
               shift.requests.includes(previewStaffId),
@@ -1872,7 +1834,7 @@ function StaffEvents({
                         ? "Roster published"
                         : event.status === "open" && !event.availabilityClosed
                         ? "Availability open"
-                        : "Requests closed"
+                        : "Availability closed"
                     }
                   />
                   <h2>{event.name}</h2>
@@ -1885,15 +1847,11 @@ function StaffEvents({
                         ? confirmed
                           ? `${confirmed} confirmed ${confirmed === 1 ? "shift" : "shifts"}`
                           : "Not assigned"
-                        : `${mine.length} pending ${mine.length === 1 ? "request" : "requests"}`}
+                        : `Available for ${mine.length} ${mine.length === 1 ? "shift" : "shifts"}`}
                     </p>
                   )}
                   <ul className="event-shift-preview" aria-label="Shift times">
                     {event.shifts.slice(0, 2).map((shift) => {
-                      const remaining = Math.max(
-                        0,
-                        shift.places - shift.requests.length,
-                      );
                       return (
                         <li key={shift.id}>
                           <span>{formatDate(shift.date)} · {shift.start}–{shift.finish}</span>
@@ -1902,9 +1860,7 @@ function StaffEvents({
                               ? "Roster published"
                               : event.status !== "open" || event.availabilityClosed
                                 ? "Closed"
-                                : remaining
-                                  ? `${remaining} open`
-                                  : "Full"}
+                                : "Availability open"}
                           </span>
                         </li>
                       );
@@ -1913,7 +1869,7 @@ function StaffEvents({
                 </div>
                 <div className="coverage">
                   <strong>{places}</strong>
-                  <span>places open</span>
+                  <span>shifts accepting availability</span>
                 </div>
                 <button
                   className="button primary"
@@ -1941,14 +1897,14 @@ function StaffEventView({
   event,
   online,
   pendingShift,
-  reserve,
+  markAvailable,
   release,
   events,
 }: {
   event: StaffEvent;
   online: boolean;
   pendingShift: string | null;
-  reserve: (shift: Shift) => void;
+  markAvailable: (shift: Shift) => void;
   release: (eventId: string, shift: Shift) => void;
   events: () => void;
 }) {
@@ -1956,7 +1912,7 @@ function StaffEventView({
   const myRequests = event.shifts.filter((shift) => shift.requests.includes(previewStaffId)).length;
   const myConfirmed = event.shifts.filter((shift) => visibleAssignments(event, shift).includes(previewStaffId)).length;
   const openPlaces = event.status === "open" && !event.availabilityClosed
-    ? event.shifts.reduce((sum, shift) => sum + Math.max(0, shift.places - shift.requests.length), 0)
+    ? event.shifts.length
     : 0;
   return (
     <section className="workspace staff-workspace">
@@ -1973,19 +1929,18 @@ function StaffEventView({
                 ? `${myConfirmed} confirmed ${myConfirmed === 1 ? "shift" : "shifts"}`
                 : "Not assigned"
               : myRequests
-                ? `${myRequests} pending ${myRequests === 1 ? "request" : "requests"}`
-                : "No requests yet"}</strong>
+                ? `Available for ${myRequests} ${myRequests === 1 ? "shift" : "shifts"}`
+                : "No availability submitted yet"}</strong>
           </div>
           <div>
             <span>Availability</span>
-            <strong>{event.status === "open" && !event.availabilityClosed ? `${openPlaces} places open` : "Requests closed"}</strong>
+            <strong>{event.status === "open" && !event.availabilityClosed ? `${openPlaces} shifts accepting availability` : "Availability closed"}</strong>
           </div>
         </div>
         <div className="shift-list">
           {event.shifts.map((shift) => {
             const mine = shift.requests.includes(previewStaffId);
             const assigned = visibleAssignments(event, shift).includes(previewStaffId);
-            const remaining = Math.max(0, shift.places - shift.requests.length);
             const locked = event.status !== "open" || event.availabilityClosed;
             const confirmed = event.rosterPublished && assigned;
             const notAssigned = event.rosterPublished && mine && !assigned;
@@ -2004,14 +1959,10 @@ function StaffEventView({
                       : notAssigned
                         ? "You were not assigned to this shift"
                         : mine
-                          ? remaining
-                            ? `Request pending · ${remaining} other ${remaining === 1 ? "place" : "places"} open`
-                            : "Request pending · no other places open"
-                          : event.rosterPublished
-                            ? "Roster published · requests closed"
-                            : remaining
-                      ? `${remaining} ${remaining === 1 ? "place" : "places"} remaining`
-                      : "Full · no places remaining"}
+                          ? "Available · awaiting the published roster"
+                          : locked
+                            ? "Availability closed"
+                            : `${shift.places} staff needed · tell the manager if you can work`}
                   </p>
                 </div>
                 <div className="shift-action">
@@ -2020,35 +1971,33 @@ function StaffEventView({
                   ) : notAssigned ? (
                     <Status value="Not assigned" />
                   ) : locked ? (
-                    <span className="state-copy">Requests closed</span>
+                    <span className="state-copy">Availability closed</span>
                   ) : mine ? (
                     <>
-                      <Status value="Pending approval" />
+                      <Status value="Available · awaiting roster" />
                       <button
                         className="button secondary"
                         type="button"
                         disabled={!online}
                         onClick={() => setReleaseTarget(shift)}
                       >
-                        Release request
+                        Withdraw availability
                       </button>
                     </>
-                  ) : remaining ? (
+                  ) : (
                     <div className="request-action">
                       <button
                         className="button primary"
                         type="button"
-                        disabled={!online || pendingShift === shift.id}
-                        onClick={() => reserve(shift)}
+                        disabled={!online || pendingShift !== null}
+                        onClick={() => markAvailable(shift)}
                       >
                         {pendingShift === shift.id
-                          ? "Requesting…"
-                          : "Request this shift"}
+                          ? "Saving…"
+                          : "I can work this shift"}
                       </button>
                       <small>Manager confirmation required</small>
                     </div>
-                  ) : (
-                    <span className="state-copy">This shift is full</span>
                   )}
                 </div>
               </article>
@@ -2056,21 +2005,21 @@ function StaffEventView({
           })}
         </div>
         <p className="authority-note">
-          Prototype behaviour: a request temporarily uses one displayed place. The manager still confirms the final roster.
+          Availability does not reserve a place. Everyone can respond; the manager chooses assignments and publishes the roster.
         </p>
         {(event.status !== "open" || event.availabilityClosed) && (
           <div className="inline-state info">
             <strong>Has your availability changed?</strong>
-            <span>Requests are closed. Contact the manager directly; in-app contact is not connected in this prototype.</span>
+            <span>Availability is closed. Contact the manager directly; in-app contact is not connected in this prototype.</span>
           </div>
         )}
         {releaseTarget && (
           <ConfirmationDialog
-            eyebrow="Release shift request"
+            eyebrow="Withdraw availability"
             title={event.name}
             copy={`${formatDate(releaseTarget.date)} · ${releaseTarget.start}–${releaseTarget.finish}`}
-            cancelLabel="Keep request"
-            confirmLabel="Release request"
+            cancelLabel="Keep availability"
+            confirmLabel="Withdraw availability"
             onCancel={() => setReleaseTarget(null)}
             onConfirm={() => {
               release(event.id, releaseTarget);
@@ -2109,14 +2058,14 @@ function Requests({
     <section className="workspace">
         <Back onClick={back}>{event.name}</Back>
         <PageHeading
-          title="Reservation requests"
+          title="Availability and assignments"
           copy={`${event.name} · ${formatEventDates(event)} · ${event.location}`}
         />
         {!event.availabilityClosed && !event.managerEditMode && (
           <div className="inline-state info">
             <div>
               <strong>Availability is still open</strong>
-              <span>Review the response pattern, then close requests before making final assignments.</span>
+              <span>Review the response pattern, then close availability before making final assignments.</span>
             </div>
           </div>
         )}
@@ -2159,7 +2108,7 @@ function Requests({
                     <label className="person-row" key={name}>
                       <span>
                         <strong>{memberName(name)}</strong>
-                        <small>Requested · awaiting decision</small>
+                        <small>Available · select for roster</small>
                       </span>
                       <input
                         type="checkbox"
@@ -2177,7 +2126,7 @@ function Requests({
                   ))}
                 </div>
               ) : (
-                <div className="small-empty">No requests yet.</div>
+                <div className="small-empty">No availability submitted yet.</div>
               )}
               {event.managerEditMode && (
                 <details className="substitute-picker">
@@ -2192,7 +2141,7 @@ function Requests({
                         <label className="person-row" key={memberId}>
                           <span>
                             <strong>{memberName(memberId)}</strong>
-                            <small>Invited fictional team member · did not request this shift</small>
+                            <small>Invited fictional team member · has not submitted availability</small>
                           </span>
                           <input
                             type="checkbox"
@@ -2220,12 +2169,12 @@ function Requests({
           >
             {event.availabilityClosed || event.managerEditMode
               ? "Review roster"
-              : "Close requests and assign"}
+              : "Close availability and assign"}
           </button>
           <span>
             {event.availabilityClosed || event.managerEditMode
               ? `${totalSelected} of ${totalPlaces} places assigned`
-              : `${event.shifts.reduce((sum, shift) => sum + shift.requests.length, 0)} requests received`}
+              : `${event.shifts.reduce((sum, shift) => sum + shift.requests.length, 0)} availability responses received`}
           </span>
         </div>
     </section>
@@ -2305,7 +2254,7 @@ function Roster({
           <div className="inline-state warning">
             <strong>Roster has open places</strong>
             <span>
-              You can still publish, or return to requests and select more
+              You can still publish, or return to assignments and select more
               people.
             </span>
           </div>
@@ -2616,7 +2565,7 @@ function MyShifts({
     <section className="workspace narrow">
         <PageHeading
           title="My shifts"
-          copy="Your pending requests and confirmed shifts."
+          copy="Your submitted availability and confirmed shifts."
         />
         {requested.length ? (
           <div className="shift-list my-shift-list">
@@ -2640,8 +2589,8 @@ function MyShifts({
                             ? "Confirmed shift"
                             : "Not assigned"
                           : event.availabilityClosed
-                            ? "Requests closed"
-                            : "Pending approval"
+                            ? "Availability closed"
+                            : "Available · awaiting roster"
                       }
                     />
                     {pending && (
@@ -2651,7 +2600,7 @@ function MyShifts({
                         disabled={!online}
                         onClick={() => setReleaseTarget({ event, shift })}
                       >
-                        Release request
+                        Withdraw availability
                       </button>
                     )}
                     <button
@@ -2668,8 +2617,8 @@ function MyShifts({
           </div>
         ) : (
           <div className="empty-state compact">
-            <h2>No shift requests yet</h2>
-            <p>Request an available shift to see it here.</p>
+            <h2>No availability submitted yet</h2>
+            <p>Choose the shifts you can work to see them here.</p>
             <button className="button primary" type="button" onClick={openEvents}>
               View events
             </button>
@@ -2677,11 +2626,11 @@ function MyShifts({
         )}
         {releaseTarget && (
           <ConfirmationDialog
-            eyebrow="Release shift request"
+            eyebrow="Withdraw availability"
             title={releaseTarget.event.name}
             copy={`${formatDate(releaseTarget.shift.date)} · ${releaseTarget.shift.start}–${releaseTarget.shift.finish}`}
-            cancelLabel="Keep request"
-            confirmLabel="Release request"
+            cancelLabel="Keep availability"
+            confirmLabel="Withdraw availability"
             onCancel={() => setReleaseTarget(null)}
             onConfirm={() => {
               release(releaseTarget.event.id, releaseTarget.shift);
@@ -2704,7 +2653,7 @@ function ShiftSummary({ shift }: { shift: Shift }) {
           {shift.places} {shift.places === 1 ? "place" : "places"}
         </span>
       </div>
-      <span>{shift.requests.length} requested</span>
+      <span>{shift.requests.length} available</span>
     </div>
   );
 }
@@ -2722,4 +2671,17 @@ function Status({ value }: { value: string }) {
           ? "info"
           : "warning";
   return <span className={`status ${tone}`}>{value}</span>;
+}
+
+function RosterSteps({ event }: { event: StaffEvent }) {
+  const active = event.rosterPublished ? 3 : event.availabilityClosed ? 2 : event.status === "open" ? 1 : 0;
+  return (
+    <ol className="roster-steps" aria-label="Rostering steps">
+      {["Plan show", "Collect availability", "Assign staff", "Publish roster"].map((label, index) => (
+        <li key={label} aria-current={active === index ? "step" : undefined} className={index <= active ? "complete" : ""}>
+          <span aria-hidden="true">{index + 1}</span>{label}
+        </li>
+      ))}
+    </ol>
+  );
 }
