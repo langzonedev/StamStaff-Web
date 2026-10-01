@@ -1,4 +1,4 @@
-const CACHE_NAME = "stampstaff-prototype-v3";
+const CACHE_NAME = "stampstaff-prototype-v4";
 const SHELL = ["/", "/offline.html", "/og.png", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
