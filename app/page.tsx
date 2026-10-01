@@ -39,7 +39,13 @@ const screens: Screen[] = [
   "my-shifts",
 ];
 
-const newShift = (date = "", id = crypto.randomUUID()): Shift => ({
+// Local prototype identifiers also work in the HTTP browser preview.
+function prototypeId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+const newShift = (date = "", id = prototypeId()): Shift => ({
   id,
   date,
   start: "09:00",
@@ -50,7 +56,7 @@ const newShift = (date = "", id = crypto.randomUUID()): Shift => ({
   publishedAssignments: [],
 });
 const blankEvent = (): StaffEvent => ({
-  id: crypto.randomUUID(),
+  id: prototypeId(),
   name: "",
   date: "",
   endDate: "",
@@ -1316,7 +1322,7 @@ function CreateEvent({
         ...current.shifts,
         {
           ...shift,
-          id: crypto.randomUUID(),
+          id: prototypeId(),
           requests: [],
           assignments: [],
           publishedAssignments: [],
@@ -2219,7 +2225,7 @@ function Roster({
   return (
     <section className="workspace narrow">
         <Back onClick={event.rosterPublished ? eventPage : back}>
-          {event.rosterPublished ? event.name : "Requests"}
+          {event.rosterPublished ? event.name : "Assignments"}
         </Back>
         <PageHeading
           title="Roster"
@@ -2280,7 +2286,7 @@ function Roster({
                     {shift.assignments.map((name) => (
                       <li key={name}>
                         {memberName(name)}
-                        <Status value="Confirmed" />
+                        <Status value="Selected for draft" />
                       </li>
                     ))}
                   </ul>
