@@ -6,6 +6,7 @@ export type Shift = {
   start: string;
   finish: string;
   places: number;
+  // Legacy field name: staff availability, never capacity-holding reservations.
   requests: MemberId[];
   assignments: MemberId[];
   publishedAssignments: MemberId[];
@@ -87,6 +88,7 @@ export function normalizeEvent(value: unknown): StaffEvent | null {
     !["draft", "open", "locked"].includes(String(value.status))
   ) return null;
 
+  const eventDate = value.date;
   const rosterPublished = Boolean(value.rosterPublished);
   const shifts = value.shifts.flatMap((shiftValue) => {
     if (!isRecord(shiftValue)) return [];
@@ -103,7 +105,7 @@ export function normalizeEvent(value: unknown): StaffEvent | null {
       id: shiftValue.id,
       date: typeof shiftValue.date === "string" && shiftValue.date
         ? shiftValue.date
-        : value.date,
+        : eventDate,
       start: shiftValue.start,
       finish: shiftValue.finish,
       places: Math.max(1, Math.floor(shiftValue.places)),
@@ -197,4 +199,17 @@ export interface RosterGateway {
   saveRosterDraft(eventId: string, input: StaffEvent, context: CommandContext): Promise<CommandResult<StaffEvent>>;
   discardRosterDraft(eventId: string, context: CommandContext): Promise<CommandResult<StaffEvent>>;
   publishRoster(eventId: string, draftRevision: number, context: CommandContext): Promise<CommandResult<StaffEvent>>;
+}
+
+/** Local fictional prototype only; the future shared service owns authorization. */
+export function setMemberAvailability(event: StaffEvent, shiftId: string, memberId: MemberId, available: boolean): StaffEvent {
+  if (event.status !== "open" || event.availabilityClosed || !event.shifts.some((shift) => shift.id === shiftId)) return event;
+  return {
+    ...event,
+    shifts: event.shifts.map((shift) => shift.id !== shiftId ? shift : {
+      ...shift,
+      requests: available ? [...new Set([...shift.requests, memberId])] : shift.requests.filter((id) => id !== memberId),
+      assignments: available ? shift.assignments : shift.assignments.filter((id) => id !== memberId),
+    }),
+  };
 }
