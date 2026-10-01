@@ -8,7 +8,7 @@ Public, external-facing PWA prototype for **StamStaff — simple event availabil
 
 It does not provide real accounts, authentication, shared capacity, email delivery, server transactions or production rostering.
 
-**Phone test:** [Open the owner-only StamStaff prototype](https://stampstaff-prototype.langaz35.chatgpt.site)
+**Pages prototype:** [Open the fictional StamStaff PWA](https://langzonedev.github.io/StamStaff-Web/). The Pages workflow builds a static client from `main`; its data remains local to each browser. The [owner-only preview](https://stampstaff-prototype.langaz35.chatgpt.site) is a separate deployment.
 
 Planned prototype outcomes are described in [`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md). The private `langzonedev/StamStaff` repository is the authoritative source for customer requirements, business rules, shared services, security, and delivery decisions.
 
@@ -47,6 +47,8 @@ npm run dev
 ```
 
 Use `npm run lint` and `npm run build` before publishing a candidate. The private repository remains authoritative for future identity, transactional capacity and notification integration decisions.
+
+The GitHub Pages workflow also runs `npm run pages:build` with the `/StamStaff-Web` project base path and publishes the generated `out/` directory. Run that command with `STAMSTAFF_STATIC_EXPORT=1`, `NEXT_PUBLIC_BASE_PATH=/StamStaff-Web`, and `NEXT_PUBLIC_SITE_URL=https://langzonedev.github.io/StamStaff-Web/` to reproduce the Pages artifact locally. The service worker caches the shell and shows an offline page when navigation fails; roster changes still require a connection.
 
 ## Availability-first prototype
 

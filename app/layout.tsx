@@ -3,31 +3,34 @@ import "./globals.css";
 import "./workflow.css";
 import RegisterServiceWorker from "./register-service-worker";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://stampstaff-prototype.langaz35.chatgpt.site";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://stampstaff-prototype.langaz35.chatgpt.site"),
+  metadataBase: new URL(new URL(siteUrl).origin),
   title: "StamStaff — Simple event rostering",
   description:
     "A fictional local prototype for staff availability and manager-assigned event rostering.",
   applicationName: "StamStaff",
-  manifest: "/manifest.webmanifest",
+  manifest: `${basePath}/manifest.webmanifest`,
   openGraph: {
     title: "StamStaff",
-    description: "Reserve a place. Manager confirms.",
+    description: "Share availability. Manager confirms shifts.",
     type: "website",
     images: [
       {
-        url: "/og.png",
+        url: `${basePath}/og.png`,
         width: 1536,
         height: 864,
-        alt: "StamStaff — Reserve a place. Manager confirms.",
+        alt: "StamStaff — Share availability. Manager confirms shifts.",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
     title: "StamStaff",
-    description: "Reserve a place. Manager confirms.",
-    images: ["/og.png"],
+    description: "Share availability. Manager confirms shifts.",
+    images: [`${basePath}/og.png`],
   },
 };
 
