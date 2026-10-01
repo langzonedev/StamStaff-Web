@@ -1,0 +1,242 @@
+.account-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 24px 48px;
+  color: #183d36;
+  min-height: 100vh;
+}
+.account-header,
+.account-identity,
+.account-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.account-brand {
+  font-size: 24px;
+  font-weight: 800;
+  text-decoration: none;
+  color: inherit;
+}
+.account-tag {
+  display: inline-block;
+  border: 1px solid #bed0c7;
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: #edf4ee;
+  font-size: 13px;
+  font-weight: 650;
+}
+.account-intro {
+  max-width: 680px;
+  margin: 48px 0 28px;
+}
+.account-eyebrow {
+  letter-spacing: 0.14em;
+  font-size: 12px;
+  font-weight: 750;
+}
+.account-intro h1 {
+  font-size: clamp(30px, 5vw, 46px);
+  line-height: 1.15;
+  margin: 12px 0;
+}
+.account-shell p {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.account-panel {
+  background: #fff;
+  border: 1px solid #d4dfd8;
+  border-radius: 18px;
+  padding: 26px;
+  margin: 20px 0;
+  box-shadow: 0 5px 18px #214d3510;
+}
+.account-panel h2 {
+  font-size: 22px;
+  margin: 0 0 12px;
+}
+.account-entry {
+  max-width: 560px;
+}
+.account-shell form {
+  display: grid;
+  gap: 18px;
+}
+.account-shell label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  min-width: 0;
+}
+.account-shell input,
+.account-shell select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #8daba0;
+  border-radius: 9px;
+  padding: 12px;
+  background: #fff;
+  color: #183d36;
+  font: inherit;
+  min-height: 46px;
+}
+.account-shell button {
+  border: 1px solid #9db5a9;
+  background: #fff;
+  border-radius: 9px;
+  padding: 11px 16px;
+  font: inherit;
+  font-weight: 650;
+  min-height: 44px;
+  cursor: pointer;
+  color: #183d36;
+}
+.account-shell .account-primary {
+  background: #175c47;
+  color: white;
+  border-color: #175c47;
+}
+.account-shell button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.account-shell :focus-visible {
+  outline: 3px solid #c26d13;
+  outline-offset: 3px;
+}
+.account-help {
+  font-size: 14px;
+  margin: 0;
+  color: #456257;
+}
+.account-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.account-notice {
+  border: 1px solid #92b2a1;
+  border-left: 5px solid #2e7254;
+  background: #f1f8f2;
+  border-radius: 9px;
+  padding: 14px 18px;
+}
+.account-notice.error {
+  border-color: #b87750;
+  background: #fff5ed;
+  color: #65351f;
+}
+.account-identity p {
+  margin: 6px 0 10px;
+}
+.account-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.account-team {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+}
+.account-team li {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 18px 0;
+  border-top: 1px solid #dce5df;
+  min-width: 0;
+}
+.account-team li > div {
+  min-width: 0;
+}
+.account-team p {
+  margin: 4px 0;
+}
+.account-team span {
+  font-size: 13px;
+}
+.account-team button {
+  flex-shrink: 0;
+}
+.account-check {
+  display: flex !important;
+  align-items: center;
+  gap: 10px !important;
+}
+.account-check input {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  flex-shrink: 0;
+}
+.account-link {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.account-footer {
+  margin-top: 36px;
+  font-size: 14px;
+}
+.account-footer a {
+  font-weight: 650;
+  color: #175c47;
+}
+.account-dialog {
+  border: 1px solid #abc0b4;
+  border-radius: 18px;
+  padding: 28px;
+  max-width: min(540px, calc(100vw - 32px));
+  color: #183d36;
+}
+.account-dialog::backdrop {
+  background: #122d2666;
+}
+.account-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .account-shell {
+    padding: 20px 16px 36px;
+  }
+  .account-intro {
+    margin-top: 32px;
+  }
+  .account-panel {
+    padding: 20px;
+  }
+  .account-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .account-identity {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .account-team li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .account-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .account-dialog {
+    padding: 20px;
+  }
+  .account-actions > * {
+    flex: 1 1 auto;
+  }
+}

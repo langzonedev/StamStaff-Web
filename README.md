@@ -55,3 +55,22 @@ The GitHub Pages workflow also runs `npm run pages:build` with the `/StamStaff-W
 The core journey is Plan show → Collect availability → Assign staff → Publish roster. Staff may volunteer for any offered shift while availability is open, even if responses exceed staff needed. The manager closes availability before assigning; staffing limits and overlap checks apply only to assignments. Existing local v3 records are preserved, with legacy request arrays now interpreted as availability. This supersedes reservation behavior for this prototype; no shared-service contract is changed.
 
 Responsive layout keeps the desktop sidebar, switches to compact bottom navigation on phones/tablets, stacks shift controls on small screens, and presents the roster as readable cards on phones while retaining the timeline on larger screens.
+# Account test
+
+The separate `/account/` route implements invited email/password setup, verification,
+sign-in/reset and private role-based account management. It requires a configured
+Firebase project and authoritative membership API; without configuration it clearly
+shows that accounts are not connected. The root roster remains a fictional local
+prototype, separate from real account state. No events or roster data are connected
+by the account slice.
+
+Build variables: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`,
+`NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`, and
+`NEXT_PUBLIC_API_URL` (API origin, without `/v1`). These are public SDK configuration;
+never put administrative credentials, real member addresses or private records in
+them. The private service derives roles; the browser never grants account authority.
+
+Account invitations reserve access and provide a link for the manager to share;
+they do not send invitation email. Passwords are chosen by the person. Full
+administrator delegation requires an already activated manager, recent authentication
+and confirmation. Cloud account ownership and billing are separate.
