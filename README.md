@@ -4,7 +4,7 @@ Public, external-facing PWA prototype for **StamStaff — simple event availabil
 
 ## Current state
 
-**Interactive fictional-data prototype.** The current build starts empty and lets a manager create a single- or multi-day event and shifts, open then close availability, review staff requests, select final assignments, and publish a local roster timeline. A controlled manager-change preview stages a reasoned correction without changing what staff see until the revised roster is republished. An optional tiny example is fictional and additive. Versioned prototype data is saved only in the current browser.
+**Interactive fictional-data prototype.** The current build starts empty and lets a manager create a single- or multi-day event and shifts, open then close availability, review unlimited staff availability responses, select final assignments, and publish a local roster timeline. A controlled manager-change preview stages a reasoned correction without changing what staff see until the revised roster is republished. An optional tiny example is fictional and additive. Versioned prototype data is saved only in the current browser.
 
 It does not provide real accounts, authentication, shared capacity, email delivery, server transactions or production rostering.
 
@@ -29,11 +29,11 @@ Assume every file, commit, build artifact, browser bundle, and issue in this rep
 - Create, edit, delete and recover a local fictional event.
 - Add capacity-limited shifts across one or more event days.
 - Switch between the Manager and Staff app views at any time.
-- Open availability, request shifts from the Staff view, then close requests before final assignment.
-- Request or release a shift, with pending, full, locked and offline states shown in context.
+- Open availability, submit availability from the Staff view, then close requests before final assignment.
+- Mark or withdraw availability, with saving, closed and offline states shown in context. Availability never consumes staffing capacity.
 - Select final assignments as the manager and publish a Gantt-style local roster timeline.
 - Revise a locked roster through a manager-only reason-and-review draft, select a fictional substitute, discard safely, or republish the new result.
-- See a staff request become confirmed or not assigned.
+- See submitted availability become a confirmed assignment or not assigned after publication.
 
 Changes persist in this browser until the prototype is reset. The role switch is not authentication, and displayed capacity is not shared between devices.
 
@@ -47,3 +47,9 @@ npm run dev
 ```
 
 Use `npm run lint` and `npm run build` before publishing a candidate. The private repository remains authoritative for future identity, transactional capacity and notification integration decisions.
+
+## Availability-first prototype
+
+The core journey is Plan show → Collect availability → Assign staff → Publish roster. Staff may volunteer for any offered shift while availability is open, even if responses exceed staff needed. The manager closes availability before assigning; staffing limits and overlap checks apply only to assignments. Existing local v3 records are preserved, with legacy request arrays now interpreted as availability. This supersedes reservation behavior for this prototype; no shared-service contract is changed.
+
+Responsive layout keeps the desktop sidebar, switches to compact bottom navigation on phones/tablets, stacks shift controls on small screens, and presents the roster as readable cards on phones while retaining the timeline on larger screens.
