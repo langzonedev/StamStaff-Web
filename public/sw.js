@@ -1,5 +1,8 @@
-const CACHE_NAME = "stampstaff-prototype-v4";
-const SHELL = ["/", "/offline.html", "/og.png", "/icon.svg"];
+const CACHE_NAME = "stampstaff-prototype-v5";
+const SCOPE = self.registration.scope;
+const SHELL = ["", "offline.html", "og.png", "icon.svg"].map((path) =>
+  new URL(path, SCOPE).toString(),
+);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)));
@@ -24,6 +27,6 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.mode !== "navigate") return;
   event.respondWith(
-    fetch(event.request).catch(() => caches.match("/offline.html")),
+    fetch(event.request).catch(() => caches.match(new URL("offline.html", SCOPE))),
   );
 });

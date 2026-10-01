@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vinext build",
+    "pages:build": "next build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
