@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://stampstaff-prototype.langaz35.chatgpt.site"),
   title: "StamStaff — Simple event rostering",
   description:
-    "A fictional local prototype for reserving event shift places and manager-confirmed rostering.",
+    "A fictional local prototype for staff availability and manager-assigned event rostering.",
   applicationName: "StamStaff",
   manifest: "/manifest.webmanifest",
   openGraph: {
