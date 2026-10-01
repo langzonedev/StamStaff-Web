@@ -809,6 +809,7 @@ function Header({
           </span>
         </div>
         <div className="role-control">
+          <a href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/account/`}>Account sign in</a>
           <span>Switch workspace</span>
           <div className="role-switch" role="group" aria-label="Preview role">
             <button
