@@ -1505,3 +1505,21 @@ button:disabled {
     font-size: 1.4rem;
   }
 }
+
+.roster-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; list-style: none; padding: 0; margin: 0 0 1.5rem; }
+.roster-steps li { display: flex; align-items: center; gap: .5rem; padding: .75rem; border-bottom: 3px solid #d7dce5; color: #526176; font-size: .875rem; }
+.roster-steps li.complete { border-color: #6355d8; color: #332779; }
+.roster-steps li[aria-current="step"] { background: #f0edff; font-weight: 700; }
+.roster-steps li span { flex: 0 0 auto; font-weight: 700; }
+@media (max-width: 640px) { .roster-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } .roster-steps li { padding: .6rem; } .event-phase { flex-wrap: wrap; } }
+
+/* Flexible controls and readable type across phone, tablet and desktop. */
+.workspace, .event-row > *, .shift-editor, .person-row > span, .page-heading > div { min-width: 0; }
+.event-row h2, .page-heading h1, .person-row strong, .staff-event-summary strong { overflow-wrap: anywhere; }
+.roster-steps { width: min(1260px, calc(100% - 64px)); margin: 24px auto 0; }
+.button { white-space: normal; padding-block: .6rem; }
+.event-form input, .change-dialog textarea { font-size: 1rem; }
+.app-nav button, .role-switch button, .staff-overview article span, .field-help, .field-error { font-size: .875rem; }
+@media (min-width: 641px) and (max-width: 1100px) { .shift-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } .event-row { grid-template-columns: minmax(0, 1fr) auto; } .event-row > .button { grid-column: 1 / -1; justify-self: start; } }
+@media (max-width: 900px) { .roster-steps { width: calc(100% - 36px); } }
+@media (max-width: 600px) { .staff-overview { grid-template-columns: 1fr; } .staff-overview article { display: grid; min-height: 84px; } .staff-overview article small { display: block; } .staff-event-summary { grid-template-columns: 1fr; } }
