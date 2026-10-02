@@ -117,11 +117,6 @@ export function Events({
     <>
       <div className="ss-page-heading">
         <div>
-          <p className="ss-eyebrow">
-            {manager
-              ? "PLAN WITH CONFIDENCE"
-              : `HELLO, ${displayName(member).toLocaleUpperCase()}`}
-          </p>
           <h1>
             {selected
               ? selected.name
@@ -131,13 +126,7 @@ export function Events({
                   ? "Events & rosters"
                   : "Your events & shifts"}
           </h1>
-          <p>
-            {selected
-              ? `${dayRange(selected)} · Adelaide time`
-              : manager
-                ? "Publish the dates. See who’s available. Build a roster that fits."
-                : "Tell your manager when you’re free, then find your confirmed shifts here."}
-          </p>
+          {selected && <p>{dayRange(selected)} · Adelaide time</p>}
         </div>
         <div className="ss-actions">
           {selected || creating ? (
@@ -156,7 +145,7 @@ export function Events({
           ) : (
             <>
               <button disabled={disabled} onClick={() => run(refreshList)}>
-                Refresh events
+                Refresh
               </button>
               {manager && (
                 <button className="primary" onClick={() => setCreating(true)}>
@@ -195,7 +184,7 @@ export function Events({
                 if (canLeave()) void run(() => open(selected.id));
               }}
             >
-              Load latest saved event
+              Refresh event
             </button>
           </div>
           <EventWorkspace
@@ -207,36 +196,11 @@ export function Events({
             disabled={disabled}
             saved={saved}
             onDirty={setDirty}
+            dirty={dirty}
           />
         </>
       ) : (
         <>
-          <div className="ss-overview">
-            <div>
-              <strong>
-                {events.filter((event) => event.status !== "archived").length}
-              </strong>
-              <span>Active events</span>
-            </div>
-            <div>
-              <strong>
-                {events.filter((event) => event.availabilityOpen).length}
-              </strong>
-              <span>Collecting availability</span>
-            </div>
-            <div>
-              <strong>
-                {
-                  events.filter(
-                    (event) =>
-                      event.publicationVersion > 0 &&
-                      event.status !== "archived",
-                  ).length
-                }
-              </strong>
-              <span>Published rosters</span>
-            </div>
-          </div>
           <div className="ss-list-heading">
             <h2>{archive ? "Event history" : "Upcoming & active"}</h2>
             <label className="ss-check">
@@ -562,7 +526,9 @@ function EventWorkspace({
   disabled,
   saved,
   onDirty,
+  dirty,
 }: {
+  dirty: boolean;
   event: EventDetail;
   member: Member;
   mutate: Mutate;
@@ -577,6 +543,7 @@ function EventWorkspace({
     [confirmAction, setConfirmAction] = useState<string | null>(null);
   const manager = member.role === "manager";
   async function command(action: string) {
+    if (dirty) throw new AppError("UNSAVED_CHANGES");
     saved(
       await mutate<EventDetail>("event_command_v1", {
         action,
@@ -590,15 +557,6 @@ function EventWorkspace({
     <>
       {manager ? (
         <>
-          <div className="ss-workflow" aria-label="Event progress">
-            <span className="done">1 · Event published</span>
-            <span className={event.availabilityOpen ? "current" : "done"}>
-              2 · Availability
-            </span>
-            <span className={!event.availabilityOpen ? "current" : ""}>
-              3 · Build & publish roster
-            </span>
-          </div>
           <div className="ss-section-tabs">
             <button
               aria-pressed={section === "availability"}
@@ -633,15 +591,16 @@ function EventWorkspace({
             />
           </div>
           {event.status !== "archived" && (
-            <Panel title="Event controls">
-              <p>
-                {event.availabilityOpen
-                  ? "Staff can still save and revise their availability. Close responses before saving or publishing the roster."
-                  : "Availability is closed. Reopen it if staff need to change their responses; review shifts again before publishing."}
-              </p>
+            <details className="ss-options">
+              <summary>Event options</summary>
+              {dirty && (
+                <p role="status">
+                  Save or clear your edits before changing the event.
+                </p>
+              )}
               <div className="ss-actions">
                 <button
-                  disabled={disabled}
+                  disabled={disabled || dirty}
                   onClick={() =>
                     setConfirmAction(
                       event.availabilityOpen
@@ -655,30 +614,38 @@ function EventWorkspace({
                     : "Reopen availability"}
                 </button>
                 <button
-                  disabled={disabled}
+                  disabled={disabled || dirty}
                   onClick={() => setConfirmAction("archive_event")}
                 >
                   Archive event
                 </button>
               </div>
-            </Panel>
+            </details>
           )}
         </>
       ) : (
         <>
-          <PublishedShifts event={event} />
-          <AvailabilityEditor
-            event={event}
-            mutate={mutate}
-            run={run}
-            disabled={
-              disabled ||
-              !event.availabilityOpen ||
-              event.status !== "published"
-            }
-            saved={saved}
-            onDirty={onDirty}
-          />
+          <div
+            className={`ss-staff-workspace ${event.availabilityOpen ? "open" : "closed"}`}
+          >
+            <div>
+              <AvailabilityEditor
+                event={event}
+                mutate={mutate}
+                run={run}
+                disabled={
+                  disabled ||
+                  !event.availabilityOpen ||
+                  event.status !== "published"
+                }
+                saved={saved}
+                onDirty={onDirty}
+              />
+            </div>
+            {(event.publicationVersion > 0 || !event.availabilityOpen) && (
+              <PublishedShifts event={event} />
+            )}
+          </div>
         </>
       )}
       {confirmAction && (
@@ -862,6 +829,7 @@ function AvailabilityEditor({
     [baseline, setBaseline] = useState(
       JSON.stringify(event.ownResponse?.blocks || []),
     ),
+    [selectedDayId, setSelectedDayId] = useState(event.days[0]?.id || ""),
     [error, setError] = useState("");
   const dirty = JSON.stringify(blocks) !== baseline;
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
@@ -878,6 +846,13 @@ function AvailabilityEditor({
     const problem = validateBlocks(blocks, event.days);
     if (problem) {
       setError(problem);
+      const invalidDay = event.days.find((day) =>
+        validateBlocks(
+          blocks.filter((block) => block.dayId === day.id),
+          [day],
+        ),
+      );
+      if (invalidDay) setSelectedDayId(invalidDay.id);
       throw new AppError("INVALID_INPUT");
     }
     const value = await mutate<EventDetail>("event_command_v1", {
@@ -894,7 +869,9 @@ function AvailabilityEditor({
   }
   return (
     <Panel
-      title="When are you available?"
+      title={
+        event.availabilityOpen ? "Your availability" : "Availability closed"
+      }
       action={
         <Badge
           tone={event.ownResponse?.status === "submitted" ? "green" : "amber"}
@@ -907,30 +884,53 @@ function AvailabilityEditor({
         </Badge>
       }
     >
-      <p>
-        Mark every time you can work. Leave the rest unavailable. You can add
-        morning and evening blocks with a gap between them.
-      </p>
-      <p className="ss-help">
-        Drag across a timeline, or use the time controls below. Green blocks
-        mean available; striped space means unavailable. Saving a draft keeps it
-        private. Submit to share with your manager.
-      </p>
       {!event.availabilityOpen && (
-        <p className="ss-notice warning">
-          Availability is closed. Contact your manager if your circumstances
-          change.
-        </p>
+        <div className="ss-trading-summary">
+          {event.days.map((day) => (
+            <p key={day.id}>
+              <strong>{dateLabel(day.date)}</strong>
+              <span>
+                {timeLabel(day.open)} – {timeLabel(day.close)}
+              </span>
+            </p>
+          ))}
+        </div>
       )}
       {error && (
         <p className="ss-notice error" role="alert">
           {error}
         </p>
       )}
+      {event.availabilityOpen && (
+        <label className="ss-day-picker">
+          Event day
+          <select
+            value={selectedDayId}
+            onChange={(change) => setSelectedDayId(change.target.value)}
+          >
+            {event.days.map((day) => (
+              <option key={day.id} value={day.id}>
+                {dateLabel(day.date)} · {timeLabel(day.open)}–
+                {timeLabel(day.close)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {event.days.map((day) => {
         const own = blocks.filter((block) => block.dayId === day.id);
         return (
-          <section className="ss-availability-day" key={day.id}>
+          <section
+            className="ss-availability-day"
+            key={day.id}
+            hidden={!event.availabilityOpen || selectedDayId !== day.id}
+            style={{
+              display:
+                event.availabilityOpen && selectedDayId === day.id
+                  ? undefined
+                  : "none",
+            }}
+          >
             <div className="ss-section-head">
               <div>
                 <h3>{dateLabel(day.date)}</h3>
@@ -953,9 +953,10 @@ function AvailabilityEditor({
                 </button>
                 <button
                   disabled={disabled}
-                  onClick={() =>
-                    setBlocks(blocks.filter((block) => block.dayId !== day.id))
-                  }
+                  onClick={() => {
+                    setBlocks(blocks.filter((block) => block.dayId !== day.id));
+                    setError("");
+                  }}
                 >
                   Unavailable
                 </button>
@@ -972,123 +973,150 @@ function AvailabilityEditor({
                 No available times selected for this day.
               </p>
             )}
-            {blocks.map((block, index) =>
-              block.dayId !== day.id ? null : (
-                <div className="ss-block-editor" key={index}>
-                  <Badge tone="green">Available</Badge>
-                  <TimeSelect
-                    label="From"
-                    value={block.start}
-                    min={day.open}
-                    max={day.close - 15}
-                    disabled={disabled}
-                    onChange={(start) =>
-                      setBlocks(
-                        blocks.map((item, i) =>
-                          i === index ? { ...item, start } : item,
-                        ),
-                      )
-                    }
-                  />
-                  <TimeSelect
-                    label="Until"
-                    value={block.end}
-                    min={day.open + 15}
-                    max={day.close}
-                    disabled={disabled}
-                    onChange={(end) =>
-                      setBlocks(
-                        blocks.map((item, i) =>
-                          i === index ? { ...item, end } : item,
-                        ),
-                      )
-                    }
-                  />
-                  <button
-                    disabled={disabled}
-                    onClick={() =>
-                      setBlocks(blocks.filter((_, i) => i !== index))
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              ),
-            )}
-            <button
-              disabled={disabled || own.length >= 8}
-              onClick={() => {
-                const sorted = [...own].sort((a, b) => a.start - b.start);
-                let start = day.open;
-                for (const block of sorted) {
-                  if (block.start > start) break;
-                  // Keep a visible unavailable gap so the new block does not
-                  // immediately merge with the preceding available interval.
-                  start = Math.max(start, block.end + 15);
-                }
-                if (start < day.close)
-                  add({
-                    dayId: day.id,
-                    start,
-                    end: Math.min(
-                      start + 60,
-                      sorted.find((block) => block.start > start)?.start ??
-                        day.close,
-                    ),
-                  });
-              }}
-            >
-              ＋ Add available block
-            </button>
+            <details className="ss-availability-details">
+              <summary>Add or edit exact times</summary>
+              {blocks.map((block, index) =>
+                block.dayId !== day.id ? null : (
+                  <div className="ss-block-editor" key={index}>
+                    <Badge tone="green">Available</Badge>
+                    <TimeSelect
+                      label="From"
+                      value={block.start}
+                      min={day.open}
+                      max={day.close - 15}
+                      disabled={disabled}
+                      onChange={(start) =>
+                        setBlocks(
+                          blocks.map((item, i) =>
+                            i === index ? { ...item, start } : item,
+                          ),
+                        )
+                      }
+                    />
+                    <TimeSelect
+                      label="Until"
+                      value={block.end}
+                      min={day.open + 15}
+                      max={day.close}
+                      disabled={disabled}
+                      onChange={(end) =>
+                        setBlocks(
+                          blocks.map((item, i) =>
+                            i === index ? { ...item, end } : item,
+                          ),
+                        )
+                      }
+                    />
+                    <button
+                      disabled={disabled}
+                      onClick={() =>
+                        setBlocks(blocks.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ),
+              )}
+              <button
+                disabled={disabled || own.length >= 8}
+                onClick={() => {
+                  const sorted = [...own].sort((a, b) => a.start - b.start);
+                  let start = day.open;
+                  for (const block of sorted) {
+                    if (block.start > start) break;
+                    start = Math.max(start, block.end + 15);
+                  }
+                  if (start < day.close)
+                    add({
+                      dayId: day.id,
+                      start,
+                      end: Math.min(
+                        start + 60,
+                        sorted.find((block) => block.start > start)?.start ??
+                          day.close,
+                      ),
+                    });
+                }}
+              >
+                ＋ Add available block
+              </button>
+            </details>
           </section>
         );
       })}
-      <div className="ss-save-bar">
-        <div>
-          <strong>
-            {dirty
-              ? "Unsaved changes"
-              : event.ownResponse?.status === "submitted"
-                ? "Availability submitted"
-                : "Ready when you are"}
-          </strong>
-          <p>
-            {blocks.length === 0
-              ? "Submitting no blocks means unavailable for every event day."
-              : "Availability is not a confirmed shift. Your manager will publish the roster."}
-          </p>
+      {!event.availabilityOpen && event.ownResponse && (
+        <details className="ss-availability-details">
+          <summary>
+            {event.ownResponse.status === "submitted"
+              ? "View submitted availability"
+              : "View private draft"}
+          </summary>
+          {event.days.map((day) => {
+            const own = blocks.filter((block) => block.dayId === day.id);
+            return (
+              <p key={day.id}>
+                <strong>{dateLabel(day.date)}:</strong>{" "}
+                {own.length
+                  ? own.map(rangeLabel).join(", ")
+                  : event.ownResponse?.status === "submitted"
+                    ? "Unavailable"
+                    : "No times selected"}
+              </p>
+            );
+          })}
+        </details>
+      )}
+      {event.availabilityOpen && (
+        <div className="ss-save-bar">
+          <div>
+            <strong>
+              {dirty
+                ? "Unsaved changes"
+                : event.ownResponse?.status === "submitted"
+                  ? "Availability submitted"
+                  : "Ready when you are"}
+            </strong>
+            {event.ownResponse?.status === "submitted" && (
+              <p>Saving a private draft withdraws your submitted response.</p>
+            )}
+            {blocks.length === 0 && (
+              <p>Submitting means unavailable for every event day.</p>
+            )}
+          </div>
+          <div className="ss-actions">
+            <button
+              disabled={disabled}
+              onClick={() =>
+                run(
+                  () => save("draft"),
+                  "Private draft saved. Submit when you are ready to share it.",
+                )
+              }
+            >
+              Save private draft
+            </button>
+            <button
+              className="primary"
+              disabled={disabled}
+              onClick={() =>
+                run(
+                  () => save("submitted"),
+                  "Availability submitted to your manager.",
+                )
+              }
+            >
+              Submit availability
+            </button>
+          </div>
         </div>
-        <div className="ss-actions">
-          <button
-            disabled={disabled}
-            onClick={() =>
-              run(
-                () => save("draft"),
-                "Private draft saved. Submit when you are ready to share it.",
-              )
-            }
-          >
-            Save private draft
-          </button>
-          <button
-            className="primary"
-            disabled={disabled}
-            onClick={() =>
-              run(
-                () => save("submitted"),
-                "Availability submitted to your manager.",
-              )
-            }
-          >
-            Submit availability
-          </button>
-        </div>
-      </div>
+      )}
     </Panel>
   );
 }
 
 function PublishedShifts({ event }: { event: EventDetail }) {
+  if (event.publicationVersion === 0 && event.availabilityOpen) return null;
   return (
     <Panel
       title="Your confirmed shifts"
@@ -1099,10 +1127,7 @@ function PublishedShifts({ event }: { event: EventDetail }) {
       }
     >
       {event.publicationVersion === 0 ? (
-        <p>
-          Your manager has not published the roster yet. Your availability does
-          not reserve a shift.
-        </p>
+        <p>The roster has not been published yet.</p>
       ) : (
         <>
           <p className="ss-help">
@@ -1141,10 +1166,6 @@ function PublishedShifts({ event }: { event: EventDetail }) {
           ) : (
             <p>No shifts have been assigned to you in this published roster.</p>
           )}
-          <p className="ss-help">
-            Updates appear here when the manager publishes. No roster
-            notification email is sent.
-          </p>
         </>
       )}
     </Panel>
@@ -1295,6 +1316,7 @@ function RosterBuilder({
   const [shifts, setShifts] = useState<Shift[]>(event.draftShifts || []),
     [baseline, setBaseline] = useState(JSON.stringify(event.draftShifts || [])),
     [dayId, setDayId] = useState(event.days[0]?.id || ""),
+    [selectedPerson, setSelectedPerson] = useState<string | null>(null),
     [note, setNote] = useState(""),
     [confirm, setConfirm] = useState(false),
     [problem, setProblem] = useState("");
@@ -1317,6 +1339,7 @@ function RosterBuilder({
     if (issue) {
       setProblem(issue.text);
       setDayId(issue.dayId);
+      setSelectedPerson(issue.memberId);
       throw new AppError(issue.code);
     }
     const value = await mutate<EventDetail>("event_command_v1", {
@@ -1345,18 +1368,11 @@ function RosterBuilder({
         </Badge>
       }
     >
-      <p>
-        Availability stays underneath your draft shifts. Add the people you need
-        and adjust their hours. Only a published roster is visible to staff.
-      </p>
       {event.availabilityOpen && (
         <div className="ss-notice warning ss-roster-next">
           <div>
             <strong>Close availability to start building</strong>
-            <p>
-              Staff can still change their times. Close responses to unlock
-              shift editing; you can reopen them later.
-            </p>
+
             <p>
               {responses.length} of {staff.length} staff have submitted
               availability.
@@ -1406,223 +1422,271 @@ function RosterBuilder({
           {problem}
         </p>
       )}
-      <div className="ss-roster-canvas">
-        <div className="ss-roster-ruler">
-          <span>Staff</span>
-          <div>
-            <span>{timeLabel(day.open)}</span>
-            <span>
-              {timeLabel(Math.round((day.open + day.close) / 30) * 15)}
-            </span>
-            <span>{timeLabel(day.close)}</span>
+      <div className="ss-roster-workspace">
+        <div className="ss-roster-canvas">
+          <div className="ss-roster-ruler">
+            <span>Staff</span>
+            <div>
+              <span>{timeLabel(day.open)}</span>
+              <span>
+                {timeLabel(Math.round((day.open + day.close) / 30) * 15)}
+              </span>
+              <span>{timeLabel(day.close)}</span>
+            </div>
           </div>
-        </div>
-        {staff.map((person) => {
-          const blocks =
-              responses
-                .find((response) => response.memberId === person.id)
-                ?.blocks.filter((block) => block.dayId === day.id) || [],
-            assigned = shifts.filter(
-              (shift) => shift.memberId === person.id && shift.dayId === day.id,
-            );
-          return (
-            <div className="ss-roster-row" key={person.id}>
-              <div className="ss-roster-person">
-                <strong>{displayName(person)}</strong>
-                <small>
-                  {blocks.length
-                    ? `${blocks.length} available ${blocks.length === 1 ? "block" : "blocks"}`
-                    : "No submitted availability"}
-                </small>
-              </div>
+          {staff.map((person) => {
+            const blocks =
+                responses
+                  .find((response) => response.memberId === person.id)
+                  ?.blocks.filter((block) => block.dayId === day.id) || [],
+              assigned = shifts.filter(
+                (shift) =>
+                  shift.memberId === person.id && shift.dayId === day.id,
+              );
+            return (
               <div
-                className="ss-roster-lane"
-                role="img"
-                aria-label={`${displayName(person)}: available ${blocks.map(rangeLabel).join(", ") || "none"}; draft shifts ${assigned.map(rangeLabel).join(", ") || "none"}`}
+                className={`ss-roster-row ${selectedPerson === person.id ? "selected" : ""}`}
+                key={person.id}
               >
-                {blocks.map((block, i) => (
-                  <span
-                    className="ss-roster-availability"
-                    key={i}
-                    style={{
-                      left: `${((block.start - day.open) / (day.close - day.open)) * 100}%`,
-                      width: `${((block.end - block.start) / (day.close - day.open)) * 100}%`,
-                    }}
-                  />
-                ))}
-                {assigned.map((shift) => (
-                  <span
-                    className="ss-roster-assignment"
-                    key={shift.id}
-                    style={{
-                      left: `${((shift.start - day.open) / (day.close - day.open)) * 100}%`,
-                      width: `${((shift.end - shift.start) / (day.close - day.open)) * 100}%`,
-                    }}
+                <div className="ss-roster-person">
+                  <button
+                    className="ss-person-select"
+                    aria-pressed={selectedPerson === person.id}
+                    onClick={() =>
+                      setSelectedPerson(
+                        selectedPerson === person.id ? null : person.id,
+                      )
+                    }
                   >
-                    {rangeLabel(shift)}
-                  </span>
-                ))}
-              </div>
-              <button
-                disabled={
-                  disabled || !blocks.length || person.status !== "active"
-                }
-                onClick={() => {
-                  const gaps = blocks.flatMap((block) => {
-                    const available: Block[] = [];
-                    let start = block.start;
-                    for (const shift of [...assigned].sort(
-                      (a, b) => a.start - b.start,
-                    )) {
-                      if (shift.end <= start || shift.start >= block.end)
-                        continue;
-                      if (shift.start > start)
+                    {displayName(person)}
+                  </button>
+                  <small>
+                    {blocks.length
+                      ? `${blocks.length} available ${blocks.length === 1 ? "block" : "blocks"}`
+                      : "No submitted availability"}
+                  </small>
+                </div>
+                <div
+                  className="ss-roster-lane"
+                  role="img"
+                  aria-label={`${displayName(person)}: available ${blocks.map(rangeLabel).join(", ") || "none"}; draft shifts ${assigned.map(rangeLabel).join(", ") || "none"}`}
+                >
+                  {blocks.map((block, i) => (
+                    <span
+                      className="ss-roster-availability"
+                      key={i}
+                      style={{
+                        left: `${((block.start - day.open) / (day.close - day.open)) * 100}%`,
+                        width: `${((block.end - block.start) / (day.close - day.open)) * 100}%`,
+                      }}
+                    />
+                  ))}
+                  {assigned.map((shift) => (
+                    <span
+                      className="ss-roster-assignment"
+                      key={shift.id}
+                      style={{
+                        left: `${((shift.start - day.open) / (day.close - day.open)) * 100}%`,
+                        width: `${((shift.end - shift.start) / (day.close - day.open)) * 100}%`,
+                      }}
+                    >
+                      {rangeLabel(shift)}
+                    </span>
+                  ))}
+                </div>
+                <button
+                  disabled={
+                    disabled || !blocks.length || person.status !== "active"
+                  }
+                  onClick={() => {
+                    setSelectedPerson(person.id);
+                    const gaps = blocks.flatMap((block) => {
+                      const available: Block[] = [];
+                      let start = block.start;
+                      for (const shift of [...assigned].sort(
+                        (a, b) => a.start - b.start,
+                      )) {
+                        if (shift.end <= start || shift.start >= block.end)
+                          continue;
+                        if (shift.start > start)
+                          available.push({
+                            dayId: day.id,
+                            start,
+                            end: shift.start,
+                          });
+                        start = Math.max(start, shift.end);
+                      }
+                      if (start < block.end)
                         available.push({
                           dayId: day.id,
                           start,
-                          end: shift.start,
+                          end: block.end,
                         });
-                      start = Math.max(start, shift.end);
+                      return available;
+                    });
+                    const first = gaps[0];
+                    if (!first) {
+                      setProblem(
+                        "All available hours are assigned. Shorten a shift to add another.",
+                      );
+                      return;
                     }
-                    if (start < block.end)
-                      available.push({ dayId: day.id, start, end: block.end });
-                    return available;
-                  });
-                  const first = gaps[0];
-                  if (!first) {
-                    setProblem(
-                      "All submitted availability is already assigned. Shorten an existing shift below to make room for another block.",
-                    );
-                    return;
-                  }
-                  setShifts([
-                    ...shifts,
-                    { ...first, memberId: person.id, id: crypto.randomUUID() },
-                  ]);
-                  setProblem("");
-                }}
-              >
-                ＋ Shift
-                <span className="ss-sr"> for {displayName(person)}</span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      <div className="ss-shift-editors">
-        {shifts
-          .filter((shift) => shift.dayId === day.id)
-          .map((shift) => (
-            <div className="ss-block-editor" key={shift.id}>
-              <strong>
-                {displayName(
-                  staff.find((person) => person.id === shift.memberId) || {
-                    name: "Former team member",
-                    preferredName: "",
-                  },
+                    setShifts([
+                      ...shifts,
+                      {
+                        ...first,
+                        memberId: person.id,
+                        id: crypto.randomUUID(),
+                      },
+                    ]);
+                    setProblem("");
+                  }}
+                >
+                  ＋ Shift
+                  <span className="ss-sr"> for {displayName(person)}</span>
+                </button>
+                {selectedPerson === person.id && (
+                  <div className="ss-shift-editors ss-inline-editor">
+                    {shifts
+                      .filter(
+                        (shift) =>
+                          shift.dayId === day.id &&
+                          shift.memberId === person.id,
+                      )
+                      .map((shift) => (
+                        <div className="ss-block-editor" key={shift.id}>
+                          <TimeSelect
+                            label="Shift starts"
+                            min={day.open}
+                            max={day.close - 15}
+                            value={shift.start}
+                            disabled={disabled}
+                            onChange={(start) =>
+                              setShifts(
+                                shifts.map((item) =>
+                                  item.id === shift.id
+                                    ? { ...item, start }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          <TimeSelect
+                            label="Shift ends"
+                            min={day.open + 15}
+                            max={day.close}
+                            value={shift.end}
+                            disabled={disabled}
+                            onChange={(end) =>
+                              setShifts(
+                                shifts.map((item) =>
+                                  item.id === shift.id
+                                    ? { ...item, end }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                          <button
+                            disabled={disabled}
+                            onClick={() =>
+                              setShifts(
+                                shifts.filter((item) => item.id !== shift.id),
+                              )
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    {!assigned.length && (
+                      <p className="ss-muted">No shifts for this day.</p>
+                    )}
+                    <button onClick={() => setSelectedPerson(null)}>
+                      Done editing
+                    </button>
+                  </div>
                 )}
-              </strong>
-              <TimeSelect
-                label="Shift starts"
-                min={day.open}
-                max={day.close - 15}
-                value={shift.start}
-                disabled={disabled}
-                onChange={(start) =>
-                  setShifts(
-                    shifts.map((item) =>
-                      item.id === shift.id ? { ...item, start } : item,
-                    ),
-                  )
-                }
-              />
-              <TimeSelect
-                label="Shift ends"
-                min={day.open + 15}
-                max={day.close}
-                value={shift.end}
-                disabled={disabled}
-                onChange={(end) =>
-                  setShifts(
-                    shifts.map((item) =>
-                      item.id === shift.id ? { ...item, end } : item,
-                    ),
-                  )
-                }
-              />
-              <button
-                disabled={disabled}
-                onClick={() =>
-                  setShifts(shifts.filter((item) => item.id !== shift.id))
-                }
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-      </div>
-      <div className="ss-save-bar">
-        <div>
-          <strong>{dirty ? "Unsaved roster changes" : "Draft roster"}</strong>
-          <p>
-            {event.publicationVersion
-              ? `Staff still see published version ${event.publicationVersion} until you publish again.`
-              : "Staff cannot see draft shifts."}
-          </p>
+              </div>
+            );
+          })}
         </div>
-        <button
-          className="primary"
-          disabled={disabled || !dirty}
-          onClick={() =>
-            run(
-              save,
-              "Draft roster saved. Publish when you are ready for staff to see it.",
-            )
-          }
-        >
-          Save draft roster
-        </button>
-      </div>
-      <div className="ss-publish">
-        <h3>
-          {event.publicationVersion
-            ? "Publish an updated roster"
-            : "Ready to share?"}
-        </h3>
-        <label>
-          {event.publicationVersion
-            ? "What changed? (required)"
-            : "Note for staff (optional)"}
-          <textarea
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            disabled={disabled}
-            placeholder="For example, Saturday start times updated"
-          />
-        </label>
-        <p className="ss-help">
-          Save your draft first. Publishing updates each person’s confirmed
-          shifts in the app.
-        </p>
-        <button
-          disabled={
-            disabled || dirty || (event.publicationVersion > 0 && !note.trim())
-          }
-          className="primary"
-          onClick={() => {
-            const issue = rosterProblem(shifts, staff, responses, event.days);
-            if (issue) {
-              setProblem(issue.text);
-              setDayId(issue.dayId);
-              return;
-            }
-            setProblem("");
-            setConfirm(true);
-          }}
-        >
-          Publish roster
-        </button>
+        <aside className="ss-roster-actions">
+          <div className="ss-save-bar">
+            <div>
+              <strong>
+                {dirty ? "Unsaved roster changes" : "Draft roster"}
+              </strong>
+              <p>
+                {event.publicationVersion
+                  ? `Staff still see published version ${event.publicationVersion} until you publish again.`
+                  : "Staff cannot see draft shifts."}
+              </p>
+            </div>
+            <button
+              className="primary"
+              disabled={disabled || !dirty}
+              onClick={() =>
+                run(
+                  save,
+                  "Draft roster saved. Publish when you are ready for staff to see it.",
+                )
+              }
+            >
+              Save draft roster
+            </button>
+          </div>
+          <div className="ss-publish">
+            <h3>
+              {event.publicationVersion
+                ? "Publish an updated roster"
+                : "Publish roster"}
+            </h3>
+            <label>
+              {event.publicationVersion
+                ? "What changed? (required)"
+                : "Note for staff (optional)"}
+              <textarea
+                maxLength={500}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={disabled}
+                placeholder="For example, Saturday start times updated"
+              />
+            </label>
+            {dirty && (
+              <p role="status" className="ss-help">
+                Save your changes before publishing.
+              </p>
+            )}
+            <button
+              disabled={
+                disabled ||
+                dirty ||
+                (event.publicationVersion > 0 && !note.trim())
+              }
+              className="primary"
+              onClick={() => {
+                const issue = rosterProblem(
+                  shifts,
+                  staff,
+                  responses,
+                  event.days,
+                );
+                if (issue) {
+                  setProblem(issue.text);
+                  setDayId(issue.dayId);
+                  setSelectedPerson(issue.memberId);
+                  return;
+                }
+                setProblem("");
+                setConfirm(true);
+              }}
+            >
+              Publish roster
+            </button>
+          </div>
+        </aside>
       </div>
       {confirm && (
         <Confirm
