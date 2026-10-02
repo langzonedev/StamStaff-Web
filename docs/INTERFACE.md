@@ -7,3 +7,7 @@ The event workspace expands to the available screen width. Account forms remain 
 Secondary event options and availability details use native disclosures. Save, submit, publication, errors, conflicts and offline states remain explicit. Nonessential transitions respect reduced motion. All mutations require an online connection and server validation.
 
 Research: [progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/), [recognition rather than recall](https://www.nngroup.com/articles/recognition-and-recall/), [reduced motion](https://www.w3.org/WAI/WCAG22/Techniques/css/C39), and the [StamPOS family](https://stampos.com.au/).
+
+Managers can view the server's published roster by day or across the event. Each dated segment uses its own trading window, with exact shift times and unassigned states. This view never reads local draft shifts.
+
+The roster builder accepts pointer-painted shifts in 15-minute steps inside submitted availability. It rejects overlaps and unavailable intervals while preserving the draft. Add shift and exact time controls remain available for keyboard use. Painting does not save or publish automatically.
