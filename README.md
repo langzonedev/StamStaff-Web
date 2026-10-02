@@ -1,5 +1,7 @@
 # StamStaff Web
 
+[**Open StamStaff PWA →**](https://langzonedev.github.io/StamStaff-Web/)
+
 Responsive PWA for event availability and manager-published rosters. The public client is paired with private, authoritative Supabase PostgreSQL RPCs. Real names, addresses, credentials and private business logic must never be committed here.
 
 ## Implemented client
