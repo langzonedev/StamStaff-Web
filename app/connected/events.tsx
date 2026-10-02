@@ -1334,6 +1334,10 @@ function RosterBuilder({
       .filter((shift) => shift.dayId === day?.id)
       .map((shift) => shift.memberId),
   ).size;
+  function editShifts(next: Shift[]) {
+    setShifts(next);
+    setProblem("");
+  }
   async function save() {
     const issue = rosterProblem(shifts, staff, responses, event.days);
     if (issue) {
@@ -1562,7 +1566,7 @@ function RosterBuilder({
                             value={shift.start}
                             disabled={disabled}
                             onChange={(start) =>
-                              setShifts(
+                              editShifts(
                                 shifts.map((item) =>
                                   item.id === shift.id
                                     ? { ...item, start }
@@ -1578,7 +1582,7 @@ function RosterBuilder({
                             value={shift.end}
                             disabled={disabled}
                             onChange={(end) =>
-                              setShifts(
+                              editShifts(
                                 shifts.map((item) =>
                                   item.id === shift.id
                                     ? { ...item, end }
@@ -1590,7 +1594,7 @@ function RosterBuilder({
                           <button
                             disabled={disabled}
                             onClick={() =>
-                              setShifts(
+                              editShifts(
                                 shifts.filter((item) => item.id !== shift.id),
                               )
                             }
