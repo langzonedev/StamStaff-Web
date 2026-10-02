@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const accountConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 );
 let client: SupabaseClient | undefined;
 export function accountClient() {
@@ -95,6 +95,7 @@ export function errorCode(error: unknown): string {
 }
 export function errorMessage(error: unknown) {
   const messages: Record<string, string> = {
+    UNSAVED_CHANGES: "Save or clear your edits before changing the event.",
     ACCESS_DENIED:
       "This account does not have access. Ask your manager to check your invitation and access.",
     ACCESS_PAUSED:

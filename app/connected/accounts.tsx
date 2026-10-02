@@ -44,9 +44,7 @@ export function Profile({
   return (
     <>
       <div className="ss-page-heading">
-        <p className="ss-eyebrow">YOUR DETAILS</p>
         <h1>My profile</h1>
-        <p>A familiar name for your team.</p>
       </div>
       <div className="ss-two-column">
         <Panel title="Profile details">
@@ -94,17 +92,39 @@ export function Profile({
             <p className="ss-help">
               We use your preferred name on the roster when you add one.
             </p>
-          <button className="primary" disabled={disabled}>
-            Save profile
-          </button>
-          <button type="button" disabled={disabled} onClick={() => {
-            if (JSON.stringify([name, preferredName]) !== baseline && !window.confirm("Replace these unsaved details with your latest saved profile?")) return;
-            void run(async () => {
-              const result = await request<AccountState>("account_session_v1");
-              const current = result.member;
-              saved(current); setName(current.name || ""); setPreferredName(current.preferredName || ""); setRevision(current.profileRevision); setBaseline(JSON.stringify([current.name || "", current.preferredName || ""]));
-            }, "Latest saved profile loaded.");
-          }}>Load latest saved profile</button>
+            <button className="primary" disabled={disabled}>
+              Save profile
+            </button>
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => {
+                if (
+                  JSON.stringify([name, preferredName]) !== baseline &&
+                  !window.confirm(
+                    "Replace these unsaved details with your latest saved profile?",
+                  )
+                )
+                  return;
+                void run(async () => {
+                  const result =
+                    await request<AccountState>("account_session_v1");
+                  const current = result.member;
+                  saved(current);
+                  setName(current.name || "");
+                  setPreferredName(current.preferredName || "");
+                  setRevision(current.profileRevision);
+                  setBaseline(
+                    JSON.stringify([
+                      current.name || "",
+                      current.preferredName || "",
+                    ]),
+                  );
+                }, "Latest saved profile loaded.");
+              }}
+            >
+              Load latest saved profile
+            </button>
           </form>
         </Panel>
         <Panel title="Account access">

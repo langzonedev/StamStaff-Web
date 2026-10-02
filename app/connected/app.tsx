@@ -6,6 +6,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import Image from "next/image";
 import type { Session } from "@supabase/supabase-js";
 import {
   accountClient,
@@ -316,7 +317,14 @@ export default function ConnectedApp({
       </a>
       <header className="ss-header">
         <a className="ss-logo" href={`${basePath}/`}>
-          <span aria-hidden="true">S</span>StamStaff
+          <Image
+            src={`${basePath}/icon.svg`}
+            alt=""
+            width={40}
+            height={40}
+            unoptimized
+          />
+          Stam<em>Staff</em>
         </a>
         {session ? (
           <div className="ss-user">
@@ -326,7 +334,7 @@ export default function ConnectedApp({
             <button onClick={leave}>Sign out</button>
           </div>
         ) : (
-          <span className="ss-tagline">Simple event rostering</span>
+          <span className="ss-tagline">StamStaff</span>
         )}
       </header>
       {member?.activated && !recovery && (
@@ -448,25 +456,6 @@ export default function ConnectedApp({
           </Panel>
         ) : !session ? (
           <section className="ss-welcome">
-            <div className="ss-welcome-copy">
-              <p className="ss-eyebrow">LESS CHASING. MORE CLARITY.</p>
-              <h1>
-                Your time.
-                <br />
-                Your team.
-                <br />
-                <em>All together.</em>
-              </h1>
-              <p>
-                Share when you’re free and see your confirmed shifts in one
-                simple place.
-              </p>
-              <div className="ss-welcome-steps">
-                <span>01 &nbsp; Share availability</span>
-                <span>02 &nbsp; Manager builds the roster</span>
-                <span>03 &nbsp; Know your shifts</span>
-              </div>
-            </div>
             <Panel
               title={
                 mode === "signin"
@@ -481,7 +470,7 @@ export default function ConnectedApp({
                   ? "Use the email address your manager invited. Your role is assigned by your manager."
                   : mode === "reset"
                     ? "We’ll request a password reset email for your account."
-                    : "Sign in to your own workspace."}
+                    : ""}
               </p>
               <form onSubmit={authSubmit}>
                 <label>

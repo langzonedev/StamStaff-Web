@@ -103,6 +103,7 @@ export function rosterProblem(
   text: string;
   code: "OUTSIDE_AVAILABILITY" | "SHIFT_OVERLAP";
   dayId: string;
+  memberId: string;
 } | null {
   for (const shift of shifts) {
     const person = staff.find((person) => person.id === shift.memberId);
@@ -126,6 +127,7 @@ export function rosterProblem(
         text: `Check ${label}: the shift must fit inside current submitted availability and belong to active staff. Adjust or remove it before saving or publishing.`,
         code: "OUTSIDE_AVAILABILITY",
         dayId: shift.dayId,
+        memberId: shift.memberId,
       };
     if (
       shifts.some(
@@ -141,6 +143,7 @@ export function rosterProblem(
         text: `Check ${label}: shifts overlap. Adjust or remove an overlapping shift before saving or publishing.`,
         code: "SHIFT_OVERLAP",
         dayId: shift.dayId,
+        memberId: shift.memberId,
       };
   }
   return null;
