@@ -12,6 +12,8 @@ import {
   type Run,
 } from "./ui";
 import {
+  chronologicalEvents,
+  chronologicalShifts,
   dateLabel,
   rangeLabel,
   timeLabel,
@@ -66,7 +68,7 @@ export function Events({
     void request<EventSummary[]>("events_list_v1")
       .then((value) => {
         if (alive) {
-          setEvents(value);
+          setEvents(chronologicalEvents(value));
           setLoaded(true);
         }
       })
@@ -88,7 +90,7 @@ export function Events({
   }
   async function refreshList() {
     const value = await request<EventSummary[]>("events_list_v1");
-    setEvents(value);
+    setEvents(chronologicalEvents(value));
     setLoaded(true);
     setLoadError(false);
   }
@@ -103,9 +105,10 @@ export function Events({
     setSelected(value);
     setCreating(false);
     setEvents((current) =>
-      [value, ...current.filter((event) => event.id !== value.id)].sort(
-        (a, b) => (a.days[0]?.date ?? "").localeCompare(b.days[0]?.date ?? ""),
-      ),
+      chronologicalEvents([
+        value,
+        ...current.filter((event) => event.id !== value.id),
+      ]),
     );
   }
   const manager = member.role === "manager";
@@ -568,7 +571,7 @@ function EventWorkspace({
   onDirty: (value: boolean) => void;
 }) {
   const [section, setSection] = useState<"availability" | "roster">(
-      "availability",
+      event.availabilityOpen ? "availability" : "roster",
     ),
     [confirmAction, setConfirmAction] = useState<string | null>(null);
   const manager = member.role === "manager";
@@ -580,6 +583,7 @@ function EventWorkspace({
         revision: event.revision,
       }),
     );
+    if (action === "close_availability") setSection("roster");
   }
   return (
     <>
@@ -623,6 +627,8 @@ function EventWorkspace({
               }
               saved={saved}
               onDirty={onDirty}
+              closeAvailability={() => setConfirmAction("close_availability")}
+              controlsDisabled={disabled}
             />
           </div>
           {event.status !== "archived" && (
@@ -684,6 +690,13 @@ function EventWorkspace({
                 : "Reopen availability?"
           }
           busy={disabled}
+          label={
+            confirmAction === "close_availability"
+              ? "Close & build roster"
+              : confirmAction === "reopen_availability"
+                ? "Reopen availability"
+                : "Archive event"
+          }
           cancel={() => setConfirmAction(null)}
           accept={() => {
             const action = confirmAction;
@@ -1107,7 +1120,7 @@ function PublishedShifts({ event }: { event: EventDetail }) {
           )}
           {event.ownShifts.length ? (
             <div className="ss-shifts">
-              {event.ownShifts.map((shift) => (
+              {chronologicalShifts(event.ownShifts, event.days).map((shift) => (
                 <article key={shift.id}>
                   <span className="ss-shift-check" aria-hidden="true">
                     ✓
@@ -1266,6 +1279,8 @@ function RosterBuilder({
   disabled,
   saved,
   onDirty,
+  closeAvailability,
+  controlsDisabled,
 }: {
   event: EventDetail;
   mutate: Mutate;
@@ -1273,6 +1288,8 @@ function RosterBuilder({
   disabled: boolean;
   saved: (event: EventDetail) => void;
   onDirty: (value: boolean) => void;
+  closeAvailability: () => void;
+  controlsDisabled: boolean;
 }) {
   const [shifts, setShifts] = useState<Shift[]>(event.draftShifts || []),
     [baseline, setBaseline] = useState(JSON.stringify(event.draftShifts || [])),
@@ -1285,7 +1302,12 @@ function RosterBuilder({
   const day = event.days.find((item) => item.id === dayId) || event.days[0];
   const staff = event.staff || [],
     responses = event.responses || [];
-  function shiftProblem(): string | null {
+  const assignedCount = new Set(
+    shifts
+      .filter((shift) => shift.dayId === day?.id)
+      .map((shift) => shift.memberId),
+  ).size;
+  function shiftProblem(): { text: string; code: string } | null {
     for (const shift of shifts) {
       const person = staff.find((person) => person.id === shift.memberId),
         available =
@@ -1301,7 +1323,10 @@ function RosterBuilder({
         ) ||
         shift.start >= shift.end
       )
-        return "Every shift must fit inside the person’s submitted availability and belong to active staff.";
+        return {
+          text: "Every shift must fit inside the person’s submitted availability and belong to active staff.",
+          code: "OUTSIDE_AVAILABILITY",
+        };
       if (
         shifts.some(
           (other) =>
@@ -1312,15 +1337,18 @@ function RosterBuilder({
             shift.start < other.end,
         )
       )
-        return "One person has overlapping shifts. Adjust those times before saving.";
+        return {
+          text: "One person has overlapping shifts. Adjust those times before saving.",
+          code: "SHIFT_OVERLAP",
+        };
     }
     return null;
   }
   async function save() {
     const issue = shiftProblem();
     if (issue) {
-      setProblem(issue);
-      throw new AppError("INVALID_INPUT");
+      setProblem(issue.text);
+      throw new AppError(issue.code);
     }
     const value = await mutate<EventDetail>("event_command_v1", {
       action: "save_roster",
@@ -1342,16 +1370,37 @@ function RosterBuilder({
   return (
     <Panel
       title="Build the roster"
-      action={<Badge>{shifts.length} draft shifts</Badge>}
+      action={
+        <Badge>
+          {shifts.length} draft {shifts.length === 1 ? "shift" : "shifts"}
+        </Badge>
+      }
     >
       <p>
         Availability stays underneath your draft shifts. Add the people you need
         and adjust their hours. Only a published roster is visible to staff.
       </p>
       {event.availabilityOpen && (
-        <p className="ss-notice warning">
-          Close availability using Event controls to save or publish shifts.
-        </p>
+        <div className="ss-notice warning ss-roster-next">
+          <div>
+            <strong>Close availability to start building</strong>
+            <p>
+              Staff can still change their times. Close responses to unlock
+              shift editing; you can reopen them later.
+            </p>
+            <p>
+              {responses.length} of {staff.length} staff have submitted
+              availability.
+            </p>
+          </div>
+          <button
+            className="primary"
+            disabled={controlsDisabled}
+            onClick={closeAvailability}
+          >
+            Close & build roster
+          </button>
+        </div>
       )}
       <div className="ss-table-controls">
         <label>
@@ -1375,14 +1424,7 @@ function RosterBuilder({
           </span>
         </div>
         <Badge>
-          {
-            new Set(
-              shifts
-                .filter((shift) => shift.dayId === day.id)
-                .map((shift) => shift.memberId),
-            ).size
-          }{" "}
-          people assigned
+          {assignedCount} {assignedCount === 1 ? "person" : "people"} assigned
         </Badge>
       </div>
       {problem && (

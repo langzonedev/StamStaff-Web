@@ -195,6 +195,7 @@ export default function ConnectedApp({
         uid.current = next?.user.id ?? null;
         authority.current = null;
         setAccount(null);
+        setTab("events");
         setName("");
         setPreferredName("");
         setPassword("");
