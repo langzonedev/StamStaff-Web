@@ -2692,4 +2692,3 @@ function RosterSteps({ event }: { event: StaffEvent }) {
     </ol>
   );
 }
-
