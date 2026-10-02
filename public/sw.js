@@ -1,6 +1,6 @@
-const CACHE_NAME = "stampstaff-prototype-v5";
+const CACHE_NAME = "stamstaff-shell-v7";
 const SCOPE = self.registration.scope;
-const SHELL = ["", "offline.html", "og.png", "icon.svg"].map((path) =>
+const SHELL = ["offline.html", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"].map((path) =>
   new URL(path, SCOPE).toString(),
 );
 
@@ -16,7 +16,8 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME)
+            .filter((key) => key !== CACHE_NAME &&
+              (key.startsWith("stamstaff-") || key.startsWith("stampstaff-prototype-")))
             .map((key) => caches.delete(key)),
         ),
       ),
