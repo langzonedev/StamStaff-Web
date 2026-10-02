@@ -11,6 +11,9 @@ import {
   type Request,
   type Run,
 } from "./ui";
+import { PublishedRoster } from "./published-roster";
+import { RosterLane } from "./roster-lane";
+import { paintProblem } from "./paint";
 import {
   chronologicalEvents,
   chronologicalShifts,
@@ -537,8 +540,14 @@ function EventWorkspace({
   saved: (value: EventDetail) => void;
   onDirty: (value: boolean) => void;
 }) {
-  const [section, setSection] = useState<"availability" | "roster">(
-      event.availabilityOpen ? "availability" : "roster",
+  const [section, setSection] = useState<
+      "availability" | "roster" | "published"
+    >(
+      event.publicationVersion > 0
+        ? "published"
+        : event.availabilityOpen
+          ? "availability"
+          : "roster",
     ),
     [confirmAction, setConfirmAction] = useState<string | null>(null);
   const manager = member.role === "manager";
@@ -570,6 +579,12 @@ function EventWorkspace({
             >
               Roster builder
             </button>
+            <button
+              aria-pressed={section === "published"}
+              onClick={() => setSection("published")}
+            >
+              Published roster
+            </button>
           </div>
           <div hidden={section !== "availability"}>
             <ManagerAvailability event={event} />
@@ -584,11 +599,18 @@ function EventWorkspace({
                 event.availabilityOpen ||
                 event.status === "archived"
               }
-              saved={saved}
+              saved={(value) => {
+                saved(value);
+                if (value.publicationVersion > event.publicationVersion)
+                  setSection("published");
+              }}
               onDirty={onDirty}
               closeAvailability={() => setConfirmAction("close_availability")}
               controlsDisabled={disabled}
             />
+          </div>
+          <div hidden={section !== "published"}>
+            <PublishedRoster event={event} />
           </div>
           {event.status !== "archived" && (
             <details className="ss-options">
@@ -1412,6 +1434,9 @@ function RosterBuilder({
             Draft shift
           </span>
         </div>
+        {!disabled && (
+          <span className="ss-paint-cue">Drag to paint a shift</span>
+        )}
         <Badge>
           {assignedCount} {assignedCount === 1 ? "person" : "people"} assigned
         </Badge>
@@ -1470,34 +1495,34 @@ function RosterBuilder({
                       : "No submitted availability"}
                   </small>
                 </div>
-                <div
-                  className="ss-roster-lane"
-                  role="img"
-                  aria-label={`${displayName(person)}: available ${blocks.map(rangeLabel).join(", ") || "none"}; draft shifts ${assigned.map(rangeLabel).join(", ") || "none"}`}
-                >
-                  {blocks.map((block, i) => (
-                    <span
-                      className="ss-roster-availability"
-                      key={i}
-                      style={{
-                        left: `${((block.start - day.open) / (day.close - day.open)) * 100}%`,
-                        width: `${((block.end - block.start) / (day.close - day.open)) * 100}%`,
-                      }}
-                    />
-                  ))}
-                  {assigned.map((shift) => (
-                    <span
-                      className="ss-roster-assignment"
-                      key={shift.id}
-                      style={{
-                        left: `${((shift.start - day.open) / (day.close - day.open)) * 100}%`,
-                        width: `${((shift.end - shift.start) / (day.close - day.open)) * 100}%`,
-                      }}
-                    >
-                      {rangeLabel(shift)}
-                    </span>
-                  ))}
-                </div>
+                <RosterLane
+                  day={day}
+                  available={blocks}
+                  shifts={assigned}
+                  name={displayName(person)}
+                  disabled={
+                    disabled || !blocks.length || person.status !== "active"
+                  }
+                  onPaint={(block) => {
+                    setSelectedPerson(person.id);
+                    const issue = paintProblem(block, blocks, assigned);
+                    if (issue) {
+                      setProblem(
+                        `${displayName(person)} · ${rangeLabel(block)}: ${issue}`,
+                      );
+                      problemRef.current?.focus();
+                      return;
+                    }
+                    editShifts([
+                      ...shifts,
+                      {
+                        ...block,
+                        memberId: person.id,
+                        id: crypto.randomUUID(),
+                      },
+                    ]);
+                  }}
+                />
                 <button
                   disabled={
                     disabled || !blocks.length || person.status !== "active"
