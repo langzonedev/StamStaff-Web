@@ -207,6 +207,10 @@ export default function ConnectedApp({
         setReauth(false);
         receipts.current.clear();
       }
+      if (event === "SIGNED_OUT") {
+        setEmail("");
+        setMode("signin");
+      }
       if (event === "PASSWORD_RECOVERY") setRecovery(true);
       setSession(next);
       setReady(true);
@@ -251,7 +255,9 @@ export default function ConnectedApp({
     setDirty(false);
     setName("");
     setPreferredName("");
+    setEmail("");
     setPassword("");
+    setMode("signin");
     setReauth(false);
     setRecovery(false);
     setGate("");
@@ -459,7 +465,7 @@ export default function ConnectedApp({
             <Panel
               title={
                 mode === "signin"
-                  ? "Welcome back"
+                  ? "Sign in"
                   : mode === "signup"
                     ? "Set up your account"
                     : "Reset your password"
@@ -529,7 +535,7 @@ export default function ConnectedApp({
                       {item === "signin"
                         ? "Back to sign in"
                         : item === "signup"
-                          ? "Invited? Set up your account"
+                          ? "Set up invited account"
                           : "Forgot password?"}
                     </button>
                   ))}
