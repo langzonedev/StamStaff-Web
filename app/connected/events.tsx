@@ -16,6 +16,7 @@ import {
   chronologicalShifts,
   dateLabel,
   rangeLabel,
+  rosterProblem,
   timeLabel,
   validateBlocks,
   type Block,
@@ -1297,6 +1298,10 @@ function RosterBuilder({
     [note, setNote] = useState(""),
     [confirm, setConfirm] = useState(false),
     [problem, setProblem] = useState("");
+  const problemRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (problem) problemRef.current?.focus();
+  }, [problem]);
   const dirty = JSON.stringify(shifts) !== baseline;
   useEffect(() => onDirty(dirty || Boolean(note)), [dirty, note, onDirty]);
   const day = event.days.find((item) => item.id === dayId) || event.days[0];
@@ -1307,47 +1312,11 @@ function RosterBuilder({
       .filter((shift) => shift.dayId === day?.id)
       .map((shift) => shift.memberId),
   ).size;
-  function shiftProblem(): { text: string; code: string } | null {
-    for (const shift of shifts) {
-      const person = staff.find((person) => person.id === shift.memberId),
-        available =
-          responses.find((response) => response.memberId === shift.memberId)
-            ?.blocks || [];
-      if (
-        person?.status !== "active" ||
-        !available.some(
-          (block) =>
-            block.dayId === shift.dayId &&
-            block.start <= shift.start &&
-            block.end >= shift.end,
-        ) ||
-        shift.start >= shift.end
-      )
-        return {
-          text: "Every shift must fit inside the person’s submitted availability and belong to active staff.",
-          code: "OUTSIDE_AVAILABILITY",
-        };
-      if (
-        shifts.some(
-          (other) =>
-            other.id !== shift.id &&
-            other.memberId === shift.memberId &&
-            other.dayId === shift.dayId &&
-            other.start < shift.end &&
-            shift.start < other.end,
-        )
-      )
-        return {
-          text: "One person has overlapping shifts. Adjust those times before saving.",
-          code: "SHIFT_OVERLAP",
-        };
-    }
-    return null;
-  }
   async function save() {
-    const issue = shiftProblem();
+    const issue = rosterProblem(shifts, staff, responses, event.days);
     if (issue) {
       setProblem(issue.text);
+      setDayId(issue.dayId);
       throw new AppError(issue.code);
     }
     const value = await mutate<EventDetail>("event_command_v1", {
@@ -1428,7 +1397,12 @@ function RosterBuilder({
         </Badge>
       </div>
       {problem && (
-        <p role="alert" className="ss-notice error">
+        <p
+          ref={problemRef}
+          tabIndex={-1}
+          role="alert"
+          className="ss-notice error"
+        >
           {problem}
         </p>
       )}
@@ -1636,7 +1610,16 @@ function RosterBuilder({
             disabled || dirty || (event.publicationVersion > 0 && !note.trim())
           }
           className="primary"
-          onClick={() => setConfirm(true)}
+          onClick={() => {
+            const issue = rosterProblem(shifts, staff, responses, event.days);
+            if (issue) {
+              setProblem(issue.text);
+              setDayId(issue.dayId);
+              return;
+            }
+            setProblem("");
+            setConfirm(true);
+          }}
         >
           Publish roster
         </button>
