@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#250861" />
+    <meta name="theme-color" content="#205e49" />
     <title>StamStaff is offline</title>
     <style>
       body {
@@ -12,8 +12,8 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: #f1f4fa;
-        color: #13072f;
+        background: #f6f7f2;
+        color: #172d29;
         font:
           18px/1.5 Inter,
           system-ui,
@@ -41,7 +41,7 @@
         padding: 0 20px;
         border: 0;
         border-radius: 6px;
-        background: #6c19ff;
+        background: #205e49;
         color: white;
         font: inherit;
         font-weight: 800;
@@ -51,8 +51,8 @@
   <body>
     <main class="card">
       <h1>You’re offline</h1>
-      <p>Connect to the internet before reserving or releasing a shift.</p>
-      <small>This prototype does not queue roster changes while offline.</small>
+      <p>Reconnect to see your events and shifts or save changes.</p>
+      <small>StamStaff does not store private rosters for offline use or queue changes. If an editing page is still open in another tab, keep it open to preserve your unsaved work.</small>
       <p><button onclick="location.reload()">Try again</button></p>
     </main>
   </body>

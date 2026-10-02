@@ -1,0 +1,27 @@
+name: Verify public client
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run pages:build
+        env:
+          STAMSTAFF_STATIC_EXPORT: '1'
+          NEXT_PUBLIC_BASE_PATH: /StamStaff-Web
+          NEXT_PUBLIC_SITE_URL: https://langzonedev.github.io/StamStaff-Web/

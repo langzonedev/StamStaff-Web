@@ -1,118 +1,153 @@
-import { getApps, initializeApp } from "firebase/app";
-import {
-  browserSessionPersistence,
-  initializeAuth,
-  type Auth,
-  type User,
-} from "firebase/auth";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const config = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-export const accountConfigured =
-  Object.values(config).every(Boolean) &&
-  Boolean(process.env.NEXT_PUBLIC_API_URL);
-let auth: Auth | undefined;
-export function accountAuth(): Auth {
-  if (!accountConfigured)
-    throw new Error("Account connection is not configured.");
-  if (!auth) {
-    const app =
-      getApps().find((candidate) => candidate.name === "stamstaff-accounts") ??
-      initializeApp(config, "stamstaff-accounts");
-    auth = initializeAuth(app, { persistence: browserSessionPersistence });
-  }
-  return auth;
+export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+export const accountConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+);
+let client: SupabaseClient | undefined;
+export function accountClient() {
+  if (!accountConfigured) throw new AppError("UNAVAILABLE");
+  if (!client)
+    client = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      {
+        auth: {
+          flowType: "implicit",
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storage: {
+            getItem: (key) =>
+              typeof window === "undefined"
+                ? null
+                : sessionStorage.getItem(key),
+            setItem: (key, value) => sessionStorage.setItem(key, value),
+            removeItem: (key) => sessionStorage.removeItem(key),
+          },
+        },
+        global: {
+          fetch: (input, init) =>
+            fetch(input, {
+              ...init,
+              cache: "no-store",
+              signal: init?.signal ?? AbortSignal.timeout(20000),
+            }),
+        },
+      },
+    );
+  return client!;
 }
 export type Member = {
   id: string;
   email: string;
-  name: string;
+  name: string | null;
+  preferredName: string | null;
   role: "staff" | "manager";
   isAdmin: boolean;
   status: "active" | "inactive";
   revision: number;
+  profileRevision: number;
   activated: boolean;
 };
-export class AccountError extends Error {
+export type AccountState = { member: Member; privacyNoticeVersion: string };
+export const displayName = (member: Pick<Member, "name" | "preferredName">) =>
+  member.preferredName || member.name || "Team member";
+export class AppError extends Error {
   constructor(public code: string) {
     super(code);
   }
 }
+const codes = [
+  "ACCESS_DENIED",
+  "SESSION_EXPIRED",
+  "ACTIVATION_REQUIRED",
+  "RECENT_LOGIN_REQUIRED",
+  "CONFLICT",
+  "LAST_ADMIN",
+  "ACCESS_PAUSED",
+  "INVALID_INPUT",
+  "RATE_LIMITED",
+  "EMAIL_UNVERIFIED",
+  "VERIFICATION_REQUIRED",
+  "SIGN_IN_REQUIRED",
+  "OFFLINE",
+  "LOCKED",
+  "OUTSIDE_AVAILABILITY",
+  "SHIFT_OVERLAP",
+  "AVAILABILITY_CLOSED",
+  "UNAVAILABLE",
+  "NOT_FOUND",
+  "EVENT_LIMIT",
+];
 export function errorCode(error: unknown): string {
-  return error && typeof error === "object" && "code" in error
-    ? String(error.code)
-    : "UNAVAILABLE";
+  if (error instanceof AppError) return error.code;
+  if (error && typeof error === "object") {
+    const value = error as { code?: string; message?: string };
+    return (
+      codes.find((code) => value.message === code || value.code === code) ??
+      value.code ??
+      "UNAVAILABLE"
+    );
+  }
+  return "UNAVAILABLE";
 }
-export function errorMessage(error: unknown): string {
-  const code = errorCode(error);
+export function errorMessage(error: unknown) {
   const messages: Record<string, string> = {
     ACCESS_DENIED:
-      "This account does not have access. Ask your manager to prepare access for this email address.",
-    EMAIL_UNVERIFIED: "Verify your email before continuing.",
+      "This account does not have access. Ask your manager to check your invitation and access.",
+    ACCESS_PAUSED:
+      "Team access is temporarily paused. Please contact your manager.",
+    SESSION_EXPIRED: "Your session has expired. Sign out and sign in again.",
+    SIGN_IN_REQUIRED: "Sign in to continue.",
+    EMAIL_UNVERIFIED: "Verify your email, then sign in to continue.",
+    VERIFICATION_REQUIRED: "Verify your email, then sign in to continue.",
     RECENT_LOGIN_REQUIRED:
-      "Please confirm your password before changing team access. Your edits are still here.",
-    SESSION_EXPIRED:
-      "Your session has expired. Sign out and sign in again to continue.",
+      "Confirm your password to manage access. Your edits have been kept; review and submit them again afterwards.",
     CONFLICT:
-      "The account may already exist or have changed. Refresh the team, review the latest details and try again.",
+      "Someone changed this information, or the action conflicts with current records. Your edits are kept. Review the latest saved version before retrying.",
     LAST_ADMIN:
-      "Keep at least one active administrator. Another manager must activate their account and receive administration access first.",
-    RATE_LIMITED:
-      "Too many attempts. Please wait a minute before trying again.",
-    "auth/too-many-requests":
-      "Too many attempts. Please wait before trying again.",
-    "auth/network-request-failed":
-      "The connection failed. Your details are still here; check your connection and try again.",
-    "auth/weak-password":
-      "Choose a stronger password with at least six characters.",
-    "auth/password-does-not-meet-requirements":
-      "This password does not meet the account requirements. Choose a stronger password.",
-    "auth/invalid-email": "Enter a valid email address.",
-    "auth/email-already-in-use":
-      "Unable to create this account. If you have already set a password, sign in or use password reset.",
-    "auth/invalid-credential":
-      "Unable to sign in. Check your email and password, or reset your password.",
-    "auth/wrong-password":
-      "Unable to sign in. Check your email and password, or reset your password.",
-    "auth/user-not-found":
-      "Unable to sign in. Check your email and password, or reset your password.",
+      "Another activated manager must have administration access before you remove the last administrator.",
+    INVALID_INPUT:
+      "Check the information entered. Times must be within trading hours, in 15-minute steps, with no overlaps.",
+    RATE_LIMITED: "Too many attempts. Wait a minute and try again.",
+    NOT_FOUND:
+      "This event is no longer available. Return to the event list and refresh.",
+    EVENT_LIMIT:
+      "This workspace has reached its event limit. Ask the business administrator for help.",
     OFFLINE:
-      "You are offline. Reconnect and try again. Changes have not been queued.",
+      "You are offline. Reconnect to save. Changes are not queued automatically.",
+    LOCKED: "This event is locked for changes. Refresh its latest state.",
+    AVAILABILITY_CLOSED:
+      "Availability is closed. Your unsaved times are kept; contact your manager.",
+    OUTSIDE_AVAILABILITY:
+      "A shift is outside submitted availability. Check the highlighted availability and adjust the shift.",
+    SHIFT_OVERLAP:
+      "A shift overlaps another assignment. Adjust its time before saving.",
+    invalid_credentials:
+      "Check your email and password, or request a password reset.",
+    email_not_confirmed:
+      "Please verify your email before signing in. You can resend the verification message below.",
+    weak_password: "Choose a stronger password with at least eight characters.",
+    over_email_send_rate_limit:
+      "Email requests are temporarily limited. Please wait before requesting another.",
+    otp_expired:
+      "This email link has expired or already been used. Request a new link.",
   };
   return (
-    messages[code] ??
-    "Account service is temporarily unavailable. Your details are still here. Please try again."
+    messages[errorCode(error)] ??
+    "The service is temporarily unavailable. Your unsaved details are kept. Please try again."
   );
 }
-export async function accountRequest<T>(
-  user: User,
-  path: string,
-  method = "GET",
-  body?: unknown,
-): Promise<T> {
-  if (!navigator.onLine) throw new AccountError("OFFLINE");
-  const token = await user.getIdToken();
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL!.replace(/\/$/, "")}/v1${path}`,
-    {
-      method,
-      mode: "cors",
-      credentials: "omit",
-      cache: "no-store",
-      redirect: "error",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(12000),
-    },
-  );
-  const result = (await response.json()) as { error?: { code?: string } };
-  if (!response.ok) throw new AccountError(result.error?.code ?? "UNAVAILABLE");
-  return result as T;
+export async function rpc<T>(name: string, input?: object): Promise<T> {
+  if (!navigator.onLine) throw new AppError("OFFLINE");
+  const { data, error } = await accountClient()
+    .schema("api")
+    .rpc(name, input === undefined ? {} : { input });
+  if (error) throw new AppError(errorCode(error));
+  return data as T;
+}
+export function callbackUrl(recovery = false) {
+  return `${window.location.origin}${basePath}/account/${recovery ? "?recovery=1" : ""}`;
 }

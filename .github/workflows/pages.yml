@@ -1,4 +1,4 @@
-name: Build and deploy fictional PWA prototype
+name: Build and deploy StamStaff PWA
 
 on:
   push:
@@ -33,11 +33,8 @@ jobs:
           STAMSTAFF_STATIC_EXPORT: '1'
           NEXT_PUBLIC_BASE_PATH: /StamStaff-Web
           NEXT_PUBLIC_SITE_URL: https://langzonedev.github.io/StamStaff-Web/
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.NEXT_PUBLIC_FIREBASE_API_KEY }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
-          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}
-          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
       - run: touch out/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

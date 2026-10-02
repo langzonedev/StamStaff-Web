@@ -1,76 +1,50 @@
 # StamStaff Web
 
-Public, external-facing PWA prototype for **StamStaff — simple event availability and rostering for small teams**.
+Responsive PWA for event availability and manager-published rosters. The public client is paired with private, authoritative Supabase PostgreSQL RPCs. Real names, addresses, credentials and private business logic must never be committed here.
 
-## Current state
+## Implemented client
 
-**Interactive fictional-data prototype.** The current build starts empty and lets a manager create a single- or multi-day event and shifts, open then close availability, review unlimited staff availability responses, select final assignments, and publish a local roster timeline. A controlled manager-change preview stages a reasoned correction without changing what staff see until the revised roster is republished. An optional tiny example is fictional and additive. Versioned prototype data is saved only in the current browser.
+- Separate Staff and Manager workspaces, with server-derived membership and roles.
+- Invited email/password signup, verification, recovery, profile onboarding and profile editing.
+- Administrator invitations and delegation to an already activated manager.
+- Event dates and trading hours, publication, response closing/reopening and archiving.
+- Multiple available blocks per day, interactive timeline and precise time controls; private draft and explicit submission.
+- Manager day/event availability table, draft roster with availability visible underneath shifts, publication and change notes.
+- Staff see only their own published shifts. Roster updates are in-app, not notification email.
+- Online-only changes with pending/error/conflict states and unsaved-change protection.
 
-It does not provide real accounts, authentication, shared capacity, email delivery, server transactions or production rostering.
+These are source implementation statements, not proof of a deployed service or successful live email delivery. The private repository records exact build, database, browser and release evidence.
 
-**Pages prototype:** [Open the fictional StamStaff PWA](https://langzonedev.github.io/StamStaff-Web/). The Pages workflow builds a static client from `main`; its data remains local to each browser. The [owner-only preview](https://stampstaff-prototype.langaz35.chatgpt.site) is a separate deployment.
+## Routes
 
-Planned prototype outcomes are described in [`docs/PRODUCT_OVERVIEW.md`](docs/PRODUCT_OVERVIEW.md). The private `langzonedev/StamStaff` repository is the authoritative source for customer requirements, business rules, shared services, security, and delivery decisions.
+`/` is the connected application. `/account/` handles sign-in, verification/recovery callbacks and account setup. `/demo/` preserves the older fictional local prototype, visibly separate from real account data. Its preview role switch is not authentication.
 
-## Public data rule
+## Configuration
 
-Assume every file, commit, build artifact, browser bundle, and issue in this repository is permanently public. Use fictional sample organisations, people, events, and shifts only. Never add credentials, real employee/customer data, private eligibility rules, or internal operational material.
+Build-time variables:
 
-## Planned quality bar
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_BASE_PATH` (for Pages, `/StamStaff-Web`)
+- `NEXT_PUBLIC_SITE_URL`
 
-- Mobile-first and useful on phone, tablet, and desktop.
-- Plain-language manager/staff flows suitable for a broad age range.
-- WCAG 2.2 AA target.
-- Truthful labels for local demo data, authentication, synchronisation, notifications, and offline behavior.
-- Reproducible lint, type-check, build, and PWA/runtime verification once scaffolding exists.
+Only the project URL and publishable client key belong in the client. Never use a secret/service-role key or database password. Missing connection settings produce a clear setup-unavailable screen. The private backend must expose only its reviewed `api` RPC schema and enforce all permissions and transactional rules.
 
-## Prototype journeys
+Auth callbacks use the exact `/account/` URL; password recovery adds `?recovery=1`. Allow these URLs in the authentication provider. The browser uses sessionStorage, an implicit callback suitable for static Pages, and an explicit new-password screen. Custom SMTP and actual delivery must be configured and tested separately. Generic invitation setup links contain no identity, role or bearer secret. Managers share these links manually.
 
-- Create, edit, delete and recover a local fictional event.
-- Add capacity-limited shifts across one or more event days.
-- Switch between the Manager and Staff app views at any time.
-- Open availability, submit availability from the Staff view, then close requests before final assignment.
-- Mark or withdraw availability, with saving, closed and offline states shown in context. Availability never consumes staffing capacity.
-- Select final assignments as the manager and publish a Gantt-style local roster timeline.
-- Revise a locked roster through a manager-only reason-and-review draft, select a fictional substitute, discard safely, or republish the new result.
-- See submitted availability become a confirmed assignment or not assigned after publication.
+## Development and verification
 
-Changes persist in this browser until the prototype is reset. The role switch is not authentication, and displayed capacity is not shared between devices.
+Node.js 22.13 or newer:
 
-## Development
-
-Requires Node.js 22.13 or newer.
-
-```bash
-npm install
+```sh
+npm ci
 npm run dev
+npm run lint
+npx tsc --noEmit
 ```
 
-Use `npm run lint` and `npm run build` before publishing a candidate. The private repository remains authoritative for future identity, transactional capacity and notification integration decisions.
+The GitHub Pages workflow runs the static build and publishes `out/`. Reproduce with `STAMSTAFF_STATIC_EXPORT=1`, `NEXT_PUBLIC_BASE_PATH=/StamStaff-Web`, the site URL and the two Supabase variables, then run `npm run pages:build`. Do not run a build against `.next` while a Next dev process is using it.
 
-The GitHub Pages workflow also runs `npm run pages:build` with the `/StamStaff-Web` project base path and publishes the generated `out/` directory. Run that command with `STAMSTAFF_STATIC_EXPORT=1`, `NEXT_PUBLIC_BASE_PATH=/StamStaff-Web`, and `NEXT_PUBLIC_SITE_URL=https://langzonedev.github.io/StamStaff-Web/` to reproduce the Pages artifact locally. The service worker caches the shell and shows an offline page when navigation fails; roster changes still require a connection.
+The service worker caches public shell assets and shows an offline page on failed navigation. It never caches Supabase account/API responses or private rosters. Writes require connectivity. Unsaved edits are held in memory; keep an editing tab open through a recoverable failure. Reloading or closing a tab can discard them.
 
-## Availability-first prototype
-
-The core journey is Plan show → Collect availability → Assign staff → Publish roster. Staff may volunteer for any offered shift while availability is open, even if responses exceed staff needed. The manager closes availability before assigning; staffing limits and overlap checks apply only to assignments. Existing local v3 records are preserved, with legacy request arrays now interpreted as availability. This supersedes reservation behavior for this prototype; no shared-service contract is changed.
-
-Responsive layout keeps the desktop sidebar, switches to compact bottom navigation on phones/tablets, stacks shift controls on small screens, and presents the roster as readable cards on phones while retaining the timeline on larger screens.
-# Account test
-
-The separate `/account/` route implements invited email/password setup, verification,
-sign-in/reset and private role-based account management. It requires a configured
-Firebase project and authoritative membership API; without configuration it clearly
-shows that accounts are not connected. The root roster remains a fictional local
-prototype, separate from real account state. No events or roster data are connected
-by the account slice.
-
-Build variables: `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`,
-`NEXT_PUBLIC_FIREBASE_PROJECT_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`, and
-`NEXT_PUBLIC_API_URL` (API origin, without `/v1`). These are public SDK configuration;
-never put administrative credentials, real member addresses or private records in
-them. The private service derives roles; the browser never grants account authority.
-
-Account invitations reserve access and provide a link for the manager to share;
-they do not send invitation email. Passwords are chosen by the person. Full
-administrator delegation requires an already activated manager, recent authentication
-and confirmation. Cloud account ownership and billing are separate.
+WCAG 2.2 AA is the target. Time controls accompany pointer timelines, status uses text as well as colour, and layouts support phone, tablet and desktop. Runtime accessibility and installability require verification against the exact candidate.

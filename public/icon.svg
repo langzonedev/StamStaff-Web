@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
   <title id="title">StamStaff</title>
-  <rect width="512" height="512" rx="80" fill="#f8f9fd"/>
-  <path d="M92 112h328v12H92z" fill="#6c19ff"/>
-  <text x="256" y="250" fill="#13072f" font-family="Inter,system-ui,sans-serif" font-size="84" font-weight="800" text-anchor="middle">Stam</text>
-  <text x="256" y="338" fill="#13072f" font-family="Inter,system-ui,sans-serif" font-size="84" font-weight="800" text-anchor="middle">Staff</text>
-  <circle cx="390" cy="396" r="22" fill="#0ea5b7"/>
+  <rect width="512" height="512" fill="#205e49"/>
+  <!-- The mark fits inside the central 80% circle for maskable app icons. -->
+  <path d="M330 166C307 146 280 139 250 141C210 143 183 165 184 195C185 226 212 238 256 251C300 264 328 280 328 310C328 347 296 373 254 373C216 373 187 359 164 339" fill="none" stroke="#ffffff" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
