@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   chronologicalEvents,
   chronologicalShifts,
+  rosterProblem,
 } from "../app/connected/types.ts";
 
 test("confirmed shifts use calendar and start time, not random day IDs", () => {
@@ -32,4 +33,47 @@ test("event refresh and save use the same upcoming order, with undated drafts la
     ["Sooner", "Later", "Undated draft"],
   );
   assert.equal(events[0].name, "Later");
+});
+
+test("changed availability identifies an invalid saved shift on another day", () => {
+  const days = [
+    { id: "first", date: "2026-10-14" },
+    { id: "second", date: "2026-10-15" },
+  ];
+  const staff = [
+    {
+      id: "fictional-person",
+      name: "Sam Example",
+      preferredName: "",
+      status: "active",
+    },
+  ];
+  const shifts = [
+    {
+      id: "saved",
+      memberId: "fictional-person",
+      dayId: "second",
+      start: 600,
+      end: 840,
+    },
+  ];
+  const responses = [
+    {
+      memberId: "fictional-person",
+      blocks: [{ dayId: "second", start: 540, end: 660 }],
+    },
+  ];
+  const issue = rosterProblem(shifts, staff, responses, days);
+  assert.equal(issue.code, "OUTSIDE_AVAILABILITY");
+  assert.equal(issue.dayId, "second");
+  assert.match(issue.text, /Thu, 15 Oct/);
+  assert.equal(
+    rosterProblem(
+      [{ ...shifts[0], start: 540, end: 660 }],
+      staff,
+      responses,
+      days,
+    ),
+    null,
+  );
 });

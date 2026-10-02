@@ -92,3 +92,56 @@ export function chronologicalShifts(shifts: Shift[], days: Day[]): Shift[] {
       a.end - b.end,
   );
 }
+
+// Advisory editing feedback only; the service revalidates every save/publication.
+export function rosterProblem(
+  shifts: Shift[],
+  staff: Staff[],
+  responses: Response[],
+  days: Day[],
+): {
+  text: string;
+  code: "OUTSIDE_AVAILABILITY" | "SHIFT_OVERLAP";
+  dayId: string;
+} | null {
+  for (const shift of shifts) {
+    const person = staff.find((person) => person.id === shift.memberId);
+    const day = days.find((day) => day.id === shift.dayId);
+    const label = `${person?.preferredName || person?.name || "Team member"} on ${day ? dateLabel(day.date) : "an unknown day"}`;
+    const available =
+      responses.find((response) => response.memberId === shift.memberId)
+        ?.blocks || [];
+    if (
+      person?.status !== "active" ||
+      !day ||
+      shift.start >= shift.end ||
+      !available.some(
+        (block) =>
+          block.dayId === shift.dayId &&
+          block.start <= shift.start &&
+          block.end >= shift.end,
+      )
+    )
+      return {
+        text: `Check ${label}: the shift must fit inside current submitted availability and belong to active staff. Adjust or remove it before saving or publishing.`,
+        code: "OUTSIDE_AVAILABILITY",
+        dayId: shift.dayId,
+      };
+    if (
+      shifts.some(
+        (other) =>
+          other.id !== shift.id &&
+          other.memberId === shift.memberId &&
+          other.dayId === shift.dayId &&
+          other.start < shift.end &&
+          shift.start < other.end,
+      )
+    )
+      return {
+        text: `Check ${label}: shifts overlap. Adjust or remove an overlapping shift before saving or publishing.`,
+        code: "SHIFT_OVERLAP",
+        dayId: shift.dayId,
+      };
+  }
+  return null;
+}
