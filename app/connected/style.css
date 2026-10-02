@@ -1300,3 +1300,20 @@
     font-size: 10px;
   }
 }
+
+.ss-roster-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.ss-roster-next > div {
+  flex: 1 1 260px;
+}
+.ss-roster-next p {
+  margin: 8px 0 0;
+}
+.ss-roster-next button {
+  flex-shrink: 0;
+}

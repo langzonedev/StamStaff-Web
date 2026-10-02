@@ -71,3 +71,24 @@ export function validateBlocks(blocks: Block[], days: Day[]): string | null {
   }
   return null;
 }
+
+// Display order uses calendar dates, never opaque day identifiers.
+export function chronologicalEvents(events: EventSummary[]): EventSummary[] {
+  return [...events].sort(
+    (a, b) =>
+      (a.days[0]?.date ?? "9999-12-31").localeCompare(
+        b.days[0]?.date ?? "9999-12-31",
+      ) || a.name.localeCompare(b.name),
+  );
+}
+export function chronologicalShifts(shifts: Shift[], days: Day[]): Shift[] {
+  const dates = new Map(days.map((day) => [day.id, day.date]));
+  return [...shifts].sort(
+    (a, b) =>
+      (dates.get(a.dayId) ?? "9999-12-31").localeCompare(
+        dates.get(b.dayId) ?? "9999-12-31",
+      ) ||
+      a.start - b.start ||
+      a.end - b.end,
+  );
+}
