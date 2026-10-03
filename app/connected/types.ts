@@ -7,6 +7,8 @@ export type Response = {
   revision: number;
   blocks: Block[];
   updatedAt: string;
+  changeNote?: string | null;
+  changedAfterPublicationVersion?: number | null;
 };
 export type EventSummary = {
   id: string;
