@@ -4,7 +4,9 @@ import "./workflow.css";
 import RegisterServiceWorker from "./register-service-worker";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://langzonedev.github.io/StamStaff-Web/";
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  "https://langzonedev.github.io/StamStaff-Web/";
 
 export const metadata: Metadata = {
   metadataBase: new URL(new URL(siteUrl).origin),
@@ -18,7 +20,11 @@ export const metadata: Metadata = {
       { url: `${basePath}/icon.svg`, type: "image/svg+xml" },
       { url: `${basePath}/icon-192.png`, sizes: "192x192", type: "image/png" },
     ],
-    apple: { url: `${basePath}/apple-touch-icon.png`, sizes: "180x180", type: "image/png" },
+    apple: {
+      url: `${basePath}/apple-touch-icon.png`,
+      sizes: "180x180",
+      type: "image/png",
+    },
   },
   appleWebApp: {
     capable: true,
@@ -49,7 +55,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#13283a",
+  colorScheme: "light dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0d1722" },
+  ],
 };
 
 export default function RootLayout({

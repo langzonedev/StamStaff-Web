@@ -1,10 +1,6 @@
+@import "./theme.css";
+
 .ss-app {
-  --ss-ink: #13283a;
-  --ss-muted: #5b6b7a;
-  --ss-line: #d9e2ea;
-  --ss-green: #12845b;
-  --ss-cream: #f6f8fa;
-  --ss-purple: #13283a;
   color: var(--ss-ink);
   background: var(--ss-cream);
   min-height: 100vh;
@@ -28,9 +24,9 @@
   gap: 8px;
   min-height: 44px;
   padding: 10px 17px;
-  border: 1px solid #d9e2ea;
+  border: 1px solid var(--ss-line);
   border-radius: 9px;
-  background: #fff;
+  background: var(--ss-surface);
   color: var(--ss-ink);
   font: inherit;
   font-size: 14px;
@@ -43,23 +39,23 @@
 }
 .ss-app button:hover:not(:disabled),
 .ss-button:hover {
-  background: #edf7f3;
-  border-color: #7fa78b;
+  background: var(--ss-hover);
+  border-color: var(--ss-positive-line);
 }
 .ss-app button.primary {
-  background: var(--ss-green);
-  border-color: var(--ss-green);
-  color: #fff;
+  background: var(--ss-action);
+  border-color: var(--ss-action);
+  color: var(--ss-on-action);
 }
 .ss-app button.primary:hover:not(:disabled) {
-  background: #0d6645;
+  background: var(--ss-action-hover);
 }
 .ss-app button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
 .ss-app :focus-visible {
-  outline: 3px solid #ca842e;
+  outline: 3px solid var(--ss-focus);
   outline-offset: 3px;
 }
 .ss-app input,
@@ -68,8 +64,8 @@
   width: 100%;
   min-width: 0;
   min-height: 46px;
-  border: 1px solid #b7c9bc;
-  background: white;
+  border: 1px solid var(--ss-input-line);
+  background: var(--ss-surface);
   color: var(--ss-ink);
   font: inherit;
   font-size: 16px;
@@ -129,7 +125,7 @@
   position: absolute;
   top: -80px;
   left: 12px;
-  background: white;
+  background: var(--ss-surface);
   padding: 12px;
   z-index: 100;
 }
@@ -143,7 +139,7 @@
   justify-content: space-between;
   gap: 20px;
   padding: 0 max(24px, calc((100vw - 1240px) / 2));
-  background: #fff;
+  background: var(--ss-surface);
   border-bottom: 1px solid var(--ss-line);
 }
 .ss-logo {
@@ -161,7 +157,7 @@
   place-items: center;
   background: var(--ss-green);
   border-radius: 9px;
-  color: #fff;
+  color: white;
   width: 34px;
   height: 36px;
   font-size: 23px;
@@ -190,7 +186,7 @@
 }
 .ss-nav {
   padding: 0 max(24px, calc((100vw - 1240px) / 2));
-  background: #fff;
+  background: var(--ss-surface);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -249,7 +245,7 @@
   text-transform: uppercase;
 }
 .ss-panel {
-  background: white;
+  background: var(--ss-surface);
   border: 1px solid var(--ss-line);
   border-radius: 15px;
   padding: 27px;
@@ -298,28 +294,28 @@
   font-size: 11px;
   line-height: 1.25;
   font-weight: 650;
-  color: #4e6358;
-  background: #f6f8fa;
-  border: 1px solid #d9e2ea;
+  color: var(--ss-muted);
+  background: var(--ss-wash);
+  border: 1px solid var(--ss-line);
 }
 .ss-badge.green {
-  color: #24533b;
-  background: #d9f2e8;
-  border-color: #c9dfc3;
+  color: var(--ss-positive-ink);
+  background: var(--ss-positive);
+  border-color: var(--ss-positive-line);
 }
 .ss-badge.amber {
-  color: #795817;
-  background: #fbf3df;
-  border-color: #eaddb9;
+  color: var(--ss-warning-ink);
+  background: var(--ss-warning);
+  border-color: var(--ss-warning-line);
 }
 .ss-badge.purple {
-  color: #13283a;
-  background: #f1edf7;
-  border-color: #dfd5ed;
+  color: var(--ss-ink);
+  background: var(--ss-neutral);
+  border-color: var(--ss-line);
 }
 .ss-badge.quiet {
-  color: #69706b;
-  background: #f0f1ee;
+  color: var(--ss-muted);
+  background: var(--ss-wash);
 }
 .ss-badges {
   display: flex;
@@ -329,26 +325,26 @@
 .ss-notice {
   padding: 14px 18px;
   border-radius: 9px;
-  background: #edf3ee;
-  border: 1px solid #c5d8c9;
+  background: var(--ss-hover);
+  border: 1px solid var(--ss-positive-line);
   margin-bottom: 20px;
   line-height: 1.5;
   font-size: 14px;
 }
 .ss-notice.error {
-  color: #7e3529;
-  background: #fff1ec;
-  border-color: #e5b9aa;
+  color: var(--ss-error-ink);
+  background: var(--ss-error);
+  border-color: var(--ss-error-line);
 }
 .ss-notice.warning {
-  background: #fcf5e5;
-  color: #77571a;
-  border-color: #e8d5a6;
+  background: var(--ss-warning);
+  color: var(--ss-warning-ink);
+  border-color: var(--ss-warning-line);
 }
 .ss-notice.success {
-  background: #d9f2e8;
-  color: #22563b;
-  border-color: #bfd8bc;
+  background: var(--ss-positive);
+  color: var(--ss-positive-ink);
+  border-color: var(--ss-positive-line);
 }
 .ss-working {
   position: fixed;
@@ -439,8 +435,8 @@
 .ss-avatar {
   display: grid;
   place-items: center;
-  background: #f6f8fa;
-  border: 1px solid #d9e2ea;
+  background: var(--ss-wash);
+  border: 1px solid var(--ss-line);
   width: 42px;
   height: 42px;
   border-radius: 50%;
@@ -461,7 +457,7 @@
   grid-template-columns: repeat(3, 1fr);
   border: 1px solid var(--ss-line);
   border-radius: 14px;
-  background: white;
+  background: var(--ss-surface);
   margin-bottom: 34px;
 }
 .ss-overview > div {
@@ -498,7 +494,7 @@
   gap: 20px;
 }
 .ss-event-card {
-  background: #fff;
+  background: var(--ss-surface);
   border: 1px solid var(--ss-line);
   padding: 24px;
   border-radius: 14px;
@@ -521,8 +517,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  border: 1px solid #d9e2ea;
-  background: #f6f8fa;
+  border: 1px solid var(--ss-line);
+  background: var(--ss-wash);
   border-radius: 10px;
   min-width: 54px;
   padding: 7px 10px;
@@ -555,9 +551,9 @@
   font-size: 12px;
 }
 .ss-empty {
-  border: 1px dashed #d9e2ea;
+  border: 1px dashed var(--ss-line);
   border-radius: 16px;
-  background: #fff;
+  background: var(--ss-surface);
   padding: 55px 30px;
   text-align: center;
   max-width: 100%;
@@ -565,7 +561,7 @@
 .ss-empty > span {
   display: block;
   font-size: 40px;
-  color: #8bab81;
+  color: var(--ss-muted);
   margin-bottom: 12px;
 }
 .ss-empty h2 {
@@ -604,17 +600,17 @@
   padding: 12px 18px;
   font-size: 12px;
   border-radius: 7px;
-  background: #edf0ea;
-  color: #768177;
+  background: var(--ss-wash);
+  color: var(--ss-muted);
 }
 .ss-workflow .done {
-  background: #edf3e7;
-  color: #466740;
+  background: var(--ss-hover);
+  color: var(--ss-positive-ink);
 }
 .ss-workflow .current {
-  background: #d9f2e8;
-  color: #2d5c36;
-  box-shadow: inset 0 0 0 1px #b7cdae;
+  background: var(--ss-positive);
+  color: var(--ss-positive-ink);
+  box-shadow: inset 0 0 0 1px var(--ss-positive-line);
   font-weight: 700;
 }
 .ss-section-tabs {
@@ -624,9 +620,9 @@
 }
 .ss-section-tabs button[aria-pressed="true"],
 .ss-segment button[aria-pressed="true"] {
-  background: #e2ecd9;
-  border-color: #b5cba9;
-  color: #2c5230;
+  background: var(--ss-positive);
+  border-color: var(--ss-positive-line);
+  color: var(--ss-positive-ink);
 }
 .ss-section-tabs button {
   min-width: 160px;
@@ -647,7 +643,7 @@
   padding: 3px;
   gap: 3px;
   border-radius: 9px;
-  background: #f6f8fa;
+  background: var(--ss-wash);
 }
 .ss-segment button {
   border: 0;
@@ -676,7 +672,7 @@
   vertical-align: top;
 }
 .ss-table thead {
-  background: #f6f8fa;
+  background: var(--ss-wash);
 }
 .ss-table th small {
   display: block;
@@ -688,7 +684,7 @@
 .ss-table th:first-child {
   position: sticky;
   left: 0;
-  background: #f6f8fa;
+  background: var(--ss-wash);
   z-index: 1;
   min-width: 160px;
 }
@@ -698,9 +694,9 @@
 .ss-time-chip {
   display: block;
   padding: 4px 8px;
-  background: #d9f2e8;
-  color: #3e6234;
-  border: 1px solid #d9f2e8;
+  background: var(--ss-positive);
+  color: var(--ss-positive-ink);
+  border: 1px solid var(--ss-positive);
   border-radius: 5px;
   margin-bottom: 5px;
   font-size: 12px;
@@ -724,14 +720,14 @@
   height: 58px;
   position: relative;
   overflow: hidden;
-  border: 1px solid #c7d4c3;
+  border: 1px solid var(--ss-line);
   border-radius: 8px;
   background: repeating-linear-gradient(
     135deg,
-    #f6f8fa,
-    #f6f8fa 5px,
-    #f6f8fa 5px,
-    #f6f8fa 7px
+    var(--ss-wash),
+    var(--ss-wash) 5px,
+    var(--ss-wash) 5px,
+    var(--ss-wash) 7px
   );
   margin-bottom: 16px;
 }
@@ -744,13 +740,13 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background: #abd59a;
-  border-left: 2px solid #3e7435;
-  border-right: 2px solid #3e7435;
+  background: var(--ss-available);
+  border-left: 2px solid var(--ss-available-edge);
+  border-right: 2px solid var(--ss-available-edge);
 }
 .ss-drag-fill {
-  background: #68af7188;
-  outline: 2px dashed #1d5c34;
+  background: var(--ss-preview);
+  outline: 2px dashed var(--ss-available-edge);
   outline-offset: -3px;
 }
 .ss-block-editor {
@@ -759,8 +755,8 @@
   align-items: center;
   gap: 14px;
   padding: 14px;
-  background: #f6f8fa;
-  border: 1px solid #d9e2ea;
+  background: var(--ss-wash);
+  border: 1px solid var(--ss-line);
   border-radius: 9px;
   margin: 12px 0;
 }
@@ -778,8 +774,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: #f0f5eb;
-  border: 1px solid #d9f2e8;
+  background: var(--ss-hover);
+  border: 1px solid var(--ss-positive);
   border-radius: 10px;
   padding: 20px;
   margin-top: 22px;
@@ -806,8 +802,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  border: 1px solid #d9f2e8;
-  background: #f6f8fa;
+  border: 1px solid var(--ss-positive);
+  background: var(--ss-wash);
   border-radius: 10px;
   padding: 18px;
 }
@@ -824,8 +820,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #d9f2e8;
-  color: #396432;
+  background: var(--ss-positive);
+  color: var(--ss-positive-ink);
 }
 .ss-legend {
   display: flex;
@@ -847,11 +843,11 @@
   border-radius: 2px;
 }
 .ss-legend .available {
-  background: #d9f2e8;
-  border: 1px solid #9fc282;
+  background: var(--ss-positive);
+  border: 1px solid var(--ss-positive-line);
 }
 .ss-legend .assigned {
-  background: #13283a;
+  background: var(--ss-roster);
 }
 .ss-roster-canvas {
   border: 1px solid var(--ss-line);
@@ -862,7 +858,7 @@
 .ss-roster-ruler {
   display: grid;
   grid-template-columns: 160px 1fr 100px;
-  background: #f6f8fa;
+  background: var(--ss-wash);
   padding: 12px 14px;
   font-size: 11px;
   color: var(--ss-muted);
@@ -904,10 +900,10 @@
   border-radius: 5px;
   background: repeating-linear-gradient(
     90deg,
-    #f6f8fa,
-    #f6f8fa calc(12.5% - 1px),
-    #d9e2ea calc(12.5% - 1px),
-    #d9e2ea 12.5%
+    var(--ss-wash),
+    var(--ss-wash) calc(12.5% - 1px),
+    var(--ss-line) calc(12.5% - 1px),
+    var(--ss-line) 12.5%
   );
   overflow: hidden;
 }
@@ -915,15 +911,15 @@
   position: absolute;
   top: 3px;
   bottom: 3px;
-  background: #d9f2e8;
-  border: 1px solid #9dbd84;
+  background: var(--ss-positive);
+  border: 1px solid var(--ss-positive-line);
   border-radius: 4px;
 }
 .ss-roster-assignment {
   position: absolute;
   top: 11px;
   bottom: 11px;
-  background: #13283a;
+  background: var(--ss-roster);
   color: white;
   display: flex;
   justify-content: center;
@@ -944,15 +940,15 @@
 }
 .ss-dialog {
   padding: 28px;
-  border: 1px solid #d9e2ea;
+  border: 1px solid var(--ss-line);
   border-radius: 16px;
   max-width: min(520px, calc(100vw - 32px));
   color: var(--ss-ink);
-  background: #fff;
+  background: var(--ss-surface);
   box-shadow: 0 25px 80px #14261830;
 }
 .ss-dialog::backdrop {
-  background: #18332877;
+  background: var(--ss-backdrop);
   backdrop-filter: blur(2px);
 }
 .ss-dialog .ss-actions {
@@ -994,7 +990,7 @@
 }
 .ss-welcome h1 em {
   font-style: normal;
-  color: #64804e;
+  color: var(--ss-muted);
 }
 .ss-welcome-copy > p:not(.ss-eyebrow) {
   font-size: 17px;
@@ -1006,7 +1002,7 @@
   flex-direction: column;
   gap: 15px;
   margin-top: 35px;
-  color: #5c6c52;
+  color: var(--ss-muted);
   font-size: 12px;
 }
 .ss-welcome .ss-panel {
@@ -1035,7 +1031,7 @@
   border: 0 !important;
   justify-content: start;
   padding: 5px 0;
-  color: #5c735b;
+  color: var(--ss-muted);
   font-size: 12px;
   min-height: 36px;
 }
@@ -1325,7 +1321,7 @@
 .ss-header {
   height: 64px;
   padding: 0 clamp(16px, 2vw, 32px);
-  background: #13283a;
+  background: var(--ss-header);
   color: white;
 }
 .ss-logo {
@@ -1421,7 +1417,7 @@
   border: 1px solid var(--ss-line);
   padding: 18px;
   border-radius: 12px;
-  background: #f6f8fa;
+  background: var(--ss-wash);
 }
 .ss-roster-actions .ss-save-bar {
   display: block;
@@ -1444,8 +1440,8 @@
   min-width: 0;
 }
 .ss-roster-row.selected {
-  background: #edf7f3;
-  box-shadow: inset 3px 0 #12845b;
+  background: var(--ss-hover);
+  box-shadow: inset 3px 0 var(--ss-green);
 }
 .ss-roster-row > button {
   min-height: 44px;
@@ -1471,15 +1467,15 @@
 .ss-roster-availability {
   background: repeating-linear-gradient(
     135deg,
-    #c3eadb,
-    #c3eadb 4px,
-    #d9f2e8 4px,
-    #d9f2e8 8px
+    var(--ss-available-stripe),
+    var(--ss-available-stripe) 4px,
+    var(--ss-positive) 4px,
+    var(--ss-positive) 8px
   );
-  border: 1px solid #12845b;
+  border: 1px solid var(--ss-green);
 }
 .ss-legend i.assigned {
-  background: #13283a;
+  background: var(--ss-roster);
 }
 .ss-welcome {
   display: block;
@@ -1502,7 +1498,7 @@
   transform: translateY(1px);
 }
 .ss-app :focus-visible {
-  outline-color: #c47700;
+  outline-color: var(--ss-focus);
 }
 @media (max-width: 1100px) {
   .ss-roster-workspace {
@@ -1604,24 +1600,24 @@
   margin-top: 16px;
 }
 .ss-badge.purple {
-  background: #e8eef3;
-  color: #13283a;
+  background: var(--ss-neutral);
+  color: var(--ss-ink);
 }
 .ss-section-tabs button[aria-pressed="true"],
 .ss-segment button[aria-pressed="true"] {
-  background: #d9f2e8;
-  color: #0d6645;
-  border-color: #12845b;
+  background: var(--ss-positive);
+  color: var(--ss-positive-ink);
+  border-color: var(--ss-green);
 }
 .ss-legend .available {
-  background: #d9f2e8;
-  border-color: #12845b;
+  background: var(--ss-positive);
+  border-color: var(--ss-green);
 }
 .ss-app button.primary:disabled {
   opacity: 1;
-  background: #d9e2ea;
-  border-color: #d9e2ea;
-  color: #5b6b7a;
+  background: var(--ss-line);
+  border-color: var(--ss-line);
+  color: var(--ss-muted);
 }
 
 .ss-staff-workspace {
@@ -1660,18 +1656,18 @@
 .ss-paint-preview {
   position: absolute;
   inset-block: 4px;
-  background: #12845b55;
-  border: 2px solid #0d6645;
+  background: var(--ss-preview);
+  border: 2px solid var(--ss-positive-ink);
   border-radius: 4px;
 }
 .ss-paint-preview.invalid {
-  border-color: #993c2f;
+  border-color: var(--ss-error-solid);
   background: repeating-linear-gradient(
     135deg,
-    #ffe1da99,
-    #ffe1da99 4px,
-    #993c2f44 4px,
-    #993c2f44 8px
+    var(--ss-error-preview),
+    var(--ss-error-preview) 4px,
+    var(--ss-error-stripe) 4px,
+    var(--ss-error-stripe) 8px
   );
 }
 .ss-paint-status {
@@ -1681,22 +1677,22 @@
   right: 0;
   padding: 5px 8px;
   border-radius: 6px;
-  background: #13283a;
+  background: var(--ss-roster);
   color: white;
   font-size: 11px;
   white-space: nowrap;
 }
 .ss-paint-status.invalid {
-  background: #993c2f;
+  background: var(--ss-error-solid);
 }
 .ss-paint-cue {
   font-size: 12px;
   color: var(--ss-muted);
 }
 .ss-roster-row > button {
-  border-color: #12845b;
-  color: #0d6645;
-  background: #edf7f3;
+  border-color: var(--ss-green);
+  color: var(--ss-positive-ink);
+  background: var(--ss-hover);
 }
 .ss-published-meta {
   display: flex;
@@ -1721,7 +1717,7 @@
   align-items: center;
 }
 .ss-published-axis {
-  background: #f6f8fa;
+  background: var(--ss-wash);
 }
 .ss-published-row {
   border-top: 1px solid var(--ss-line);
@@ -1731,7 +1727,7 @@
   font-size: 14px;
 }
 .ss-published-lane .ss-roster-assignment {
-  background: #0d6645;
+  background: var(--ss-published);
   inset-block: 8px;
 }
 .ss-published-ranges {
@@ -1761,7 +1757,7 @@
   vertical-align: top;
 }
 .ss-published-table th {
-  background: #f6f8fa;
+  background: var(--ss-wash);
 }
 .ss-published-table th:first-child {
   position: sticky;
@@ -1777,7 +1773,7 @@
 }
 .ss-published-table td {
   min-width: 260px;
-  background: white;
+  background: var(--ss-surface);
 }
 .ss-published-table .ss-timeline-labels {
   margin: 12px 0 0;
@@ -1815,10 +1811,10 @@
 }
 
 .ss-publication-note {
-  border-left: 3px solid #12845b;
+  border-left: 3px solid var(--ss-green);
   padding: 6px 12px;
   color: var(--ss-ink);
-  background: #edf7f3;
+  background: var(--ss-hover);
   border-radius: 0 6px 6px 0;
 }
 
@@ -1853,4 +1849,16 @@
 }
 .ss-time-clear {
   justify-self: start;
+}
+
+/* Header actions remain readable when hovered in either mode. */
+.ss-header .ss-user button:hover:not(:disabled) {
+  background: #284052;
+  border-color: #93adbf;
+  color: white;
+}
+.ss-app input::placeholder,
+.ss-app textarea::placeholder {
+  color: var(--ss-muted);
+  opacity: 1;
 }

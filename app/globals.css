@@ -1,10 +1,11 @@
 @import "tailwindcss";
 :root {
+  color-scheme: light;
   --ink: #13072f;
   --ink-2: #2c2352;
   --muted: #635d78;
   --line: #d7d8e5;
-  --paper: #f1f4fa;
+  --paper: #ffffff;
   --panel: #f8f9fd;
   --white: #fff;
   --wash: #e9eef6;
@@ -404,5 +405,17 @@ h2 {
   *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+}
+
+/* Connected pages fill the viewport; keep the legacy demo palette isolated. */
+html:has(.ss-app),
+body:has(.ss-app) {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:has(.ss-app),
+  body:has(.ss-app) {
+    background: #0d1722;
   }
 }

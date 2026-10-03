@@ -1,4 +1,4 @@
-const CACHE_NAME = "stamstaff-shell-v8";
+const CACHE_NAME = "stamstaff-shell-v9";
 const SCOPE = self.registration.scope;
 const SHELL = ["offline.html", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"].map((path) =>
   new URL(path, SCOPE).toString(),
