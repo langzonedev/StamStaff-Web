@@ -48,7 +48,9 @@ export default function ConnectedApp({
     [online, setOnline] = useState(true);
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin"),
     [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
+    [password, setPassword] = useState(""),
+    [emailReady, setEmailReady] = useState(false),
+    [passwordReady, setPasswordReady] = useState(false);
   const [recovery, setRecovery] = useState(false),
     [reauth, setReauth] = useState(false),
     [dirty, setDirty] = useState(false),
@@ -208,6 +210,8 @@ export default function ConnectedApp({
         receipts.current.clear();
       }
       if (event === "SIGNED_OUT") {
+        setEmailReady(false);
+        setPasswordReady(false);
         setEmail("");
         setMode("signin");
       }
@@ -255,6 +259,8 @@ export default function ConnectedApp({
     setDirty(false);
     setName("");
     setPreferredName("");
+    setEmailReady(false);
+    setPasswordReady(false);
     setEmail("");
     setPassword("");
     setMode("signin");
@@ -486,6 +492,8 @@ export default function ConnectedApp({
                     type="email"
                     maxLength={254}
                     autoComplete="email"
+                    readOnly={!emailReady}
+                    onFocus={() => setEmailReady(true)}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                   />
@@ -500,6 +508,8 @@ export default function ConnectedApp({
                       autoComplete={
                         mode === "signup" ? "new-password" : "current-password"
                       }
+                      readOnly={!passwordReady}
+                      onFocus={() => setPasswordReady(true)}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                     />
@@ -511,7 +521,12 @@ export default function ConnectedApp({
                     welcome.
                   </p>
                 )}
-                <button className="primary" disabled={disabled}>
+                <button
+                  className="primary"
+                  disabled={
+                    disabled || !email.trim() || (mode !== "reset" && !password)
+                  }
+                >
                   {mode === "signin"
                     ? "Sign in →"
                     : mode === "signup"
