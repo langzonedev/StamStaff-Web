@@ -1542,7 +1542,12 @@ function RosterBuilder({
     [baseline, setBaseline] = useState(JSON.stringify(event.draftShifts || [])),
     [dayId, setDayId] = useState(event.days[0]?.id || ""),
     [selectedPerson, setSelectedPerson] = useState<string | null>(
-      event.staff?.[0]?.id || null,
+      () => event.staff?.find((person) =>
+        person.status === "active" && event.responses?.some((response) =>
+          response.memberId === person.id && response.status === "submitted" &&
+          response.blocks.some((block) => block.dayId === event.days[0]?.id),
+        ),
+      )?.id || null,
     ),
     [note, setNote] = useState(""),
     [confirm, setConfirm] = useState(false),
