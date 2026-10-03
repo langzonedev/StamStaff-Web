@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   basePath,
   displayName,
@@ -38,6 +38,8 @@ export function Profile({
   const [baseline, setBaseline] = useState(
     JSON.stringify([name, preferredName]),
   );
+  const [nameError, setNameError] = useState("");
+  const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
     onDirty(JSON.stringify([name, preferredName]) !== baseline);
   }, [name, preferredName, baseline, onDirty]);
@@ -51,6 +53,12 @@ export function Profile({
           <form
             onSubmit={(event) => {
               event.preventDefault();
+              if (!name.trim()) {
+                setNameError("Enter your name.");
+                nameInput.current?.focus();
+                return;
+              }
+              setNameError("");
               void run(async () => {
                 const result = await mutate<AccountState>("profile_update_v1", {
                   name: name.trim(),
@@ -73,18 +81,37 @@ export function Profile({
             <label>
               Name
               <input
+                ref={nameInput}
+                aria-invalid={Boolean(nameError)}
+                aria-describedby={
+                  nameError ? "ss-profile-name-error" : undefined
+                }
                 required
+                disabled={disabled}
                 maxLength={80}
                 autoComplete="name"
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameError("");
+                }}
               />
             </label>
+            {nameError && (
+              <p
+                className="ss-notice error"
+                role="alert"
+                id="ss-profile-name-error"
+              >
+                {nameError}
+              </p>
+            )}
             <label>
               Preferred name (optional)
               <input
                 maxLength={80}
                 autoComplete="nickname"
+                disabled={disabled}
                 value={preferredName}
                 onChange={(event) => setPreferredName(event.target.value)}
               />
@@ -111,6 +138,7 @@ export function Profile({
                     await request<AccountState>("account_session_v1");
                   const current = result.member;
                   saved(current);
+                  setNameError("");
                   setName(current.name || "");
                   setPreferredName(current.preferredName || "");
                   setRevision(current.profileRevision);
@@ -161,6 +189,7 @@ export function Team({
 }: Common & { request: Request; reloadAccount: () => Promise<AccountState> }) {
   const [members, setMembers] = useState<Member[]>([]),
     [loaded, setLoaded] = useState(false),
+    [loadError, setLoadError] = useState(false),
     [nextOffset, setNextOffset] = useState<number | null>(null);
   const [email, setEmail] = useState(""),
     [role, setRole] = useState<Member["role"]>("staff"),
@@ -170,17 +199,41 @@ export function Team({
   useEffect(() => {
     onDirty(Boolean(email || edit));
   }, [email, edit, onDirty]);
-  async function load(offset = 0) {
-    const result = await request<{
-      members: Member[];
-      nextOffset: number | null;
-    }>("members_list_v1", { offset, limit: 50 });
-    setMembers((current) =>
-      offset ? [...current, ...result.members] : result.members,
-    );
-    setNextOffset(result.nextOffset);
-    setLoaded(true);
-  }
+  const load = useCallback(
+    async (offset = 0) => {
+      const result = await request<{
+        members: Member[];
+        nextOffset: number | null;
+      }>("members_list_v1", { offset, limit: 50 });
+      setMembers((current) =>
+        offset ? [...current, ...result.members] : result.members,
+      );
+      setNextOffset(result.nextOffset);
+      setLoaded(true);
+      setLoadError(false);
+    },
+    [request],
+  );
+  useEffect(() => {
+    let active = true;
+    void request<{ members: Member[]; nextOffset: number | null }>(
+      "members_list_v1",
+      { offset: 0, limit: 50 },
+    )
+      .then((result) => {
+        if (!active) return;
+        setMembers(result.members);
+        setNextOffset(result.nextOffset);
+        setLoaded(true);
+        setLoadError(false);
+      })
+      .catch(() => {
+        if (active) setLoadError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [request]);
   return (
     <>
       <div className="ss-page-heading">
@@ -211,6 +264,7 @@ export function Team({
               type="email"
               autoComplete="off"
               required
+              disabled={disabled}
               maxLength={254}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -220,6 +274,7 @@ export function Team({
             Role
             <select
               value={role}
+              disabled={disabled}
               onChange={(event) =>
                 setRole(event.target.value as Member["role"])
               }
@@ -266,8 +321,12 @@ export function Team({
           Administration lets a manager invite people and manage roles and
           access. Cloud provider ownership and billing are separate.
         </p>
-        {!loaded ? (
-          <p>Refresh to load current accounts.</p>
+        {loadError ? (
+          <p className="ss-notice error" role="alert">
+            Could not load team accounts. Try Refresh team.
+          </p>
+        ) : !loaded ? (
+          <p role="status">Loading team accounts…</p>
         ) : (
           <ul className="ss-members">
             {members.map((person) => (
@@ -346,6 +405,7 @@ export function Team({
                 Role
                 <select
                   value={edit.role}
+                  disabled={disabled}
                   onChange={(event) => {
                     const role = event.target.value as Member["role"];
                     setEdit({
@@ -363,6 +423,7 @@ export function Team({
                 Access
                 <select
                   value={edit.status}
+                  disabled={disabled}
                   onChange={(event) => {
                     const status = event.target.value as Member["status"];
                     setEdit({
@@ -382,6 +443,7 @@ export function Team({
                 type="checkbox"
                 checked={edit.isAdmin}
                 disabled={
+                  disabled ||
                   !edit.target.activated ||
                   edit.target.role !== "manager" ||
                   edit.role !== "manager" ||
@@ -402,7 +464,11 @@ export function Team({
               <button className="primary" disabled={disabled}>
                 Review change
               </button>
-              <button type="button" onClick={() => setEdit(null)}>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setEdit(null)}
+              >
                 Cancel
               </button>
             </div>

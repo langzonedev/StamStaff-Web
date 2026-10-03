@@ -314,11 +314,16 @@ function EventEditor({
     [error, setError] = useState("");
   const [baseline, setBaseline] = useState(JSON.stringify([name, days])),
     [confirm, setConfirm] = useState(false);
-  const dirty = baseline !== JSON.stringify([name, days]);
+  const pendingDates = Boolean(from || to);
+  const dirty = baseline !== JSON.stringify([name, days]) || pendingDates;
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
   function addDates() {
     if (!from || !to || from > to) {
       setError("Choose a valid start and end date.");
+      return;
+    }
+    if (opening >= closing) {
+      setError("Choose a closing time after the opening time.");
       return;
     }
     const result = [...days];
@@ -340,10 +345,22 @@ function EventEditor({
         return;
       }
     }
+    if (result.length === days.length) {
+      setError(
+        "Those dates are already in the event. Adjust their hours below, or clear these dates.",
+      );
+      return;
+    }
     setDays(result.sort((a, b) => a.date.localeCompare(b.date)));
+    setFrom("");
+    setTo("");
     setError("");
   }
   async function save() {
+    if (pendingDates) {
+      setError("Add or clear your selected dates before saving the event.");
+      throw new AppError("UNSAVED_CHANGES");
+    }
     if (
       !name.trim() ||
       !days.length ||
@@ -383,12 +400,13 @@ function EventEditor({
             <input
               maxLength={120}
               required
+              disabled={disabled}
               value={name}
               placeholder="For example, Spring food festival"
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <fieldset>
+          <fieldset disabled={disabled}>
             <legend>Add event dates</legend>
             <div className="ss-form-grid">
               <label>
@@ -427,6 +445,18 @@ function EventEditor({
             <button type="button" onClick={addDates}>
               Add these dates
             </button>
+            {pendingDates && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFrom("");
+                  setTo("");
+                  setError("");
+                }}
+              >
+                Clear selected dates
+              </button>
+            )}
           </fieldset>
           <p className="ss-help">
             Times are Adelaide time, in 15-minute steps. For overnight trading,
@@ -442,6 +472,7 @@ function EventEditor({
               <strong>{dateLabel(day.date)}</strong>
               <TimeSelect
                 label="Opens"
+                disabled={disabled}
                 value={day.open}
                 max={1425}
                 onChange={(open) =>
@@ -454,6 +485,7 @@ function EventEditor({
               />
               <TimeSelect
                 label="Closes"
+                disabled={disabled}
                 value={day.close}
                 min={15}
                 onChange={(close) =>
@@ -466,6 +498,7 @@ function EventEditor({
               />
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() =>
                   setDays(days.filter((item) => item.id !== day.id))
                 }
@@ -514,8 +547,9 @@ function EventEditor({
           }}
         >
           <p>
-            {name} will appear to staff with {days.length} trading days.
-            Published dates and hours are fixed.
+            {name} will appear to staff with {days.length} trading{" "}
+            {days.length === 1 ? "day" : "days"}. Published dates and hours are
+            fixed.
           </p>
         </Confirm>
       )}
@@ -873,6 +907,7 @@ function AvailabilityEditor({
     [editing, setEditing] = useState(false),
     [note, setNote] = useState(""),
     [confirmChange, setConfirmChange] = useState(false),
+    [confirmDiscard, setConfirmDiscard] = useState(false),
     [pendingTimes, setPendingTimes] = useState<Record<string, TimeDraft>>({});
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -908,6 +943,16 @@ function AvailabilityEditor({
       setError("");
       return true;
     }
+  }
+  function discardChanges() {
+    const submitted = event.ownResponse?.blocks || [];
+    setBlocks(submitted);
+    setBaseline(JSON.stringify(submitted));
+    setPendingTimes({});
+    setNote("");
+    setError("");
+    setEditing(false);
+    setConfirmDiscard(false);
   }
   async function save(status: "draft" | "submitted") {
     if (hasPendingTimes) {
@@ -1047,6 +1092,10 @@ function AvailabilityEditor({
                       ...blocks.filter((block) => block.dayId !== day.id),
                       { dayId: day.id, start: day.open, end: day.close },
                     ]);
+                    setPendingTimes({
+                      ...pendingTimes,
+                      [day.id]: { start: "", end: "" },
+                    });
                     setError("");
                   }}
                 >
@@ -1056,6 +1105,10 @@ function AvailabilityEditor({
                   disabled={disabled}
                   onClick={() => {
                     setBlocks(blocks.filter((block) => block.dayId !== day.id));
+                    setPendingTimes({
+                      ...pendingTimes,
+                      [day.id]: { start: "", end: "" },
+                    });
                     setError("");
                   }}
                 >
@@ -1083,7 +1136,7 @@ function AvailabilityEditor({
                 onChange={(value) =>
                   setPendingTimes({ ...pendingTimes, [day.id]: value })
                 }
-                disabled={disabled || own.length >= 8}
+                disabled={disabled}
                 onAdd={add}
               />
               {blocks.map((block, index) =>
@@ -1190,6 +1243,17 @@ function AvailabilityEditor({
             )}
           </div>
           <div className="ss-actions">
+            {postPublication && (
+              <button
+                disabled={disabled}
+                onClick={() => {
+                  if (dirty) setConfirmDiscard(true);
+                  else discardChanges();
+                }}
+              >
+                Cancel changes
+              </button>
+            )}
             {!postPublication && (
               <button
                 disabled={disabled}
@@ -1224,6 +1288,20 @@ function AvailabilityEditor({
             </button>
           </div>
         </div>
+      )}
+      {confirmDiscard && (
+        <Confirm
+          title="Discard availability changes?"
+          label="Discard changes"
+          busy={disabled}
+          cancel={() => setConfirmDiscard(false)}
+          accept={discardChanges}
+        >
+          <p>
+            Your last submitted availability and confirmed shifts stay
+            unchanged.
+          </p>
+        </Confirm>
       )}
       {confirmChange && (
         <Confirm
@@ -1895,8 +1973,8 @@ function RosterBuilder({
           }}
         >
           <p>
-            {shifts.length} shifts will be published for {event.name}. Staff
-            will see their own shifts only.
+            {shifts.length} {shifts.length === 1 ? "shift" : "shifts"} will be
+            published for {event.name}. Staff will see their own shifts only.
           </p>
           {note && <p>Note: {note}</p>}
         </Confirm>
