@@ -1,0 +1,115 @@
+/* Semantic colours follow the device preference, including native controls. */
+.ss-app {
+  --ss-ink: #13283a;
+  --ss-muted: #5b6b7a;
+  --ss-line: #d9e2ea;
+  --ss-green: #0d7752;
+  --ss-cream: #ffffff;
+  --ss-surface: #ffffff;
+  --ss-wash: #f6f8fa;
+  --ss-hover: #edf7f3;
+  --ss-input-line: #80968e;
+  --ss-positive-ink: #24533b;
+  --ss-positive: #d9f2e8;
+  --ss-positive-line: #7fa78b;
+  --ss-warning-ink: #77571a;
+  --ss-warning: #fcf5e5;
+  --ss-warning-line: #b49b60;
+  --ss-error-ink: #7e3529;
+  --ss-error: #fff1ec;
+  --ss-error-line: #bd8070;
+  --ss-neutral: #e8eef3;
+  --ss-available: #abd59a;
+  --ss-available-edge: #3e7435;
+  --ss-available-stripe: #c3eadb;
+  --ss-roster: #13283a;
+  --ss-published: #0d6645;
+  --ss-header: #13283a;
+  --ss-focus: #ad6800;
+  --ss-action: #0d7752;
+  --ss-action-hover: #0b6546;
+  --ss-on-action: #ffffff;
+  --ss-preview: #12845b55;
+  --ss-error-preview: #ffe1da99;
+  --ss-error-stripe: #993c2f44;
+  --ss-error-solid: #993c2f;
+  --ss-backdrop: #18332877;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  .ss-app {
+    --ss-ink: #e9f0f7;
+    --ss-muted: #b1c0cf;
+    --ss-line: #40576b;
+    --ss-green: #68deb0;
+    --ss-cream: #0d1722;
+    --ss-surface: #152332;
+    --ss-wash: #1c2d3e;
+    --ss-hover: #203e39;
+    --ss-input-line: #70879b;
+    --ss-positive-ink: #a0edcc;
+    --ss-positive: #183f34;
+    --ss-positive-line: #58997f;
+    --ss-warning-ink: #f1d28d;
+    --ss-warning: #3b301a;
+    --ss-warning-line: #9f874e;
+    --ss-error-ink: #ffbdad;
+    --ss-error: #402724;
+    --ss-error-line: #ab786a;
+    --ss-neutral: #243a4d;
+    --ss-available: #29664e;
+    --ss-available-edge: #65d3a4;
+    --ss-available-stripe: #245b46;
+    --ss-roster: #355a78;
+    --ss-published: #25624e;
+    --ss-header: #101e2c;
+    --ss-focus: #f1bb65;
+    --ss-action: #5ad6aa;
+    --ss-action-hover: #85e5c1;
+    --ss-on-action: #09271c;
+    --ss-preview: #68deb055;
+    --ss-error-preview: #a1665655;
+    --ss-error-stripe: #ffbdad44;
+    --ss-error-solid: #8a4032;
+    --ss-backdrop: #000000aa;
+  }
+}
+/* Older browsers use the media-query palette above. */
+@supports (color: light-dark(white, black)) {
+  .ss-app {
+    --ss-ink: light-dark(#13283a, #e9f0f7);
+    --ss-muted: light-dark(#5b6b7a, #b1c0cf);
+    --ss-line: light-dark(#d9e2ea, #40576b);
+    --ss-green: light-dark(#0d7752, #68deb0);
+    --ss-cream: light-dark(#ffffff, #0d1722);
+    --ss-surface: light-dark(#ffffff, #152332);
+    --ss-wash: light-dark(#f6f8fa, #1c2d3e);
+    --ss-hover: light-dark(#edf7f3, #203e39);
+    --ss-input-line: light-dark(#80968e, #70879b);
+    --ss-positive-ink: light-dark(#24533b, #a0edcc);
+    --ss-positive: light-dark(#d9f2e8, #183f34);
+    --ss-positive-line: light-dark(#7fa78b, #58997f);
+    --ss-warning-ink: light-dark(#77571a, #f1d28d);
+    --ss-warning: light-dark(#fcf5e5, #3b301a);
+    --ss-warning-line: light-dark(#b49b60, #9f874e);
+    --ss-error-ink: light-dark(#7e3529, #ffbdad);
+    --ss-error: light-dark(#fff1ec, #402724);
+    --ss-error-line: light-dark(#bd8070, #ab786a);
+    --ss-neutral: light-dark(#e8eef3, #243a4d);
+    --ss-available: light-dark(#abd59a, #29664e);
+    --ss-available-edge: light-dark(#3e7435, #65d3a4);
+    --ss-available-stripe: light-dark(#c3eadb, #245b46);
+    --ss-roster: light-dark(#13283a, #355a78);
+    --ss-published: light-dark(#0d6645, #25624e);
+    --ss-header: light-dark(#13283a, #101e2c);
+    --ss-focus: light-dark(#ad6800, #f1bb65);
+    --ss-action: light-dark(#0d7752, #5ad6aa);
+    --ss-action-hover: light-dark(#0b6546, #85e5c1);
+    --ss-on-action: light-dark(#ffffff, #09271c);
+    --ss-preview: light-dark(#12845b55, #68deb055);
+    --ss-error-preview: light-dark(#ffe1da99, #a1665655);
+    --ss-error-stripe: light-dark(#993c2f44, #ffbdad44);
+    --ss-error-solid: light-dark(#993c2f, #8a4032);
+    --ss-backdrop: light-dark(#18332877, #000000aa);
+  }
+}

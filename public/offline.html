@@ -3,7 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#13283a" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#ffffff"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#0d1722"
+    />
     <title>StamStaff is offline</title>
     <style>
       body {
@@ -12,7 +22,7 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: #f6f8fa;
+        background: #ffffff;
         color: #13283a;
         font:
           18px/1.5 Inter,
@@ -46,13 +56,44 @@
         font: inherit;
         font-weight: 800;
       }
+      :root {
+        color-scheme: light dark;
+      }
+      button:focus-visible {
+        outline: 3px solid #ad6800;
+        outline-offset: 3px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #0d1722;
+          color: #e9f0f7;
+        }
+        .card {
+          background: #152332;
+          border-color: #40576b;
+        }
+        small {
+          color: #b1c0cf;
+        }
+        button {
+          background: #5ad6aa;
+          color: #09271c;
+        }
+        button:focus-visible {
+          outline-color: #f1bb65;
+        }
+      }
     </style>
   </head>
   <body>
     <main class="card">
       <h1>You’re offline</h1>
       <p>Reconnect to see your events and shifts or save changes.</p>
-      <small>StamStaff does not store private rosters for offline use or queue changes. If an editing page is still open in another tab, keep it open to preserve your unsaved work.</small>
+      <small
+        >StamStaff does not store private rosters for offline use or queue
+        changes. If an editing page is still open in another tab, keep it open
+        to preserve your unsaved work.</small
+      >
       <p><button onclick="location.reload()">Try again</button></p>
     </main>
   </body>
