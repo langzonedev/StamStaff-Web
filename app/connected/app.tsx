@@ -62,6 +62,7 @@ export default function ConnectedApp({
     lock = useRef(false),
     receipts = useRef(new Map<string, string>());
   const authority = useRef<string | null>(null);
+  const onboardingNameInput = useRef<HTMLInputElement>(null);
   const acceptAccount = useCallback((value: AccountState) => {
     const next = `${value.member.id}:${value.member.role}:${value.member.isAdmin}:${value.member.status}`;
     if (authority.current && authority.current !== next) {
@@ -601,6 +602,11 @@ export default function ConnectedApp({
             <form
               onSubmit={(event) => {
                 event.preventDefault();
+                if (!name.trim()) {
+                  setNotice({ text: "Enter your name.", error: true });
+                  onboardingNameInput.current?.focus();
+                  return;
+                }
                 void run(async () => {
                   const result = await mutate<AccountState>(
                     "account_activate_v1",
@@ -619,7 +625,9 @@ export default function ConnectedApp({
               <label>
                 Name
                 <input
+                  ref={onboardingNameInput}
                   required
+                  disabled={disabled}
                   maxLength={80}
                   autoComplete="name"
                   value={name}
@@ -634,6 +642,7 @@ export default function ConnectedApp({
                 <input
                   maxLength={80}
                   autoComplete="nickname"
+                  disabled={disabled}
                   value={preferredName}
                   onChange={(event) => {
                     setPreferredName(event.target.value);

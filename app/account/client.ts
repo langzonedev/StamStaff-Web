@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 export const accountConfigured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
 );
 let client: SupabaseClient | undefined;
 export function accountClient() {
@@ -111,7 +111,7 @@ export function errorMessage(error: unknown) {
     LAST_ADMIN:
       "Another activated manager must have administration access before you remove the last administrator.",
     INVALID_INPUT:
-      "Check the information entered. Times must be within trading hours, in 15-minute steps, with no overlaps.",
+      "Check the details you entered and try again. Your unsaved changes are kept.",
     RATE_LIMITED: "Too many attempts. Wait a minute and try again.",
     NOT_FOUND:
       "This event is no longer available. Return to the event list and refresh.",
