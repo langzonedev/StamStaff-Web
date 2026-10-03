@@ -140,6 +140,10 @@ export function PrivacyNotice() {
         availability; staff see only their own records.
       </p>
       <p>
+        Availability changes and their comments are retained with event history
+        for manager review. Comments only need to explain changes to your hours.
+      </p>
+      <p>
         Core account and roster data is hosted in Australia. Email delivery and
         provider support may involve overseas processing. StamStaff does not
         sell your information or use it for marketing. Ask your manager about

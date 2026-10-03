@@ -1821,3 +1821,36 @@
   background: #edf7f3;
   border-radius: 0 6px 6px 0;
 }
+
+/* Native time controls are a first-class alternative to timeline painting. */
+.ss-block-editor.ss-time-entry {
+  grid-template-columns: 1fr 1fr auto;
+}
+.ss-change-comment {
+  margin-top: 20px;
+}
+.ss-availability-updates article {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid currentColor;
+}
+.ss-availability-updates p {
+  margin: 8px 0;
+}
+@media (max-width: 600px) {
+  .ss-block-editor.ss-time-entry {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ss-block-editor.ss-time-entry > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+.ss-time-error,
+.ss-time-clear {
+  grid-column: 1 / -1;
+}
+.ss-time-clear {
+  justify-self: start;
+}
