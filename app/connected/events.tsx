@@ -13,7 +13,7 @@ import {
 } from "./ui";
 import { PublishedRoster } from "./published-roster";
 import { RosterLane } from "./roster-lane";
-import { paintProblem } from "./paint";
+import { freeWindows, paintProblem, windowTimes } from "./paint";
 import { TimeRangeEntry, type TimeDraft } from "./time-range-entry";
 import { AvailabilityUpdates } from "./availability-updates";
 import {
@@ -23,6 +23,8 @@ import {
   rangeLabel,
   rosterProblem,
   timeLabel,
+  mealProblem,
+  scheduledHours,
   validateBlocks,
   type Block,
   type Day,
@@ -1381,6 +1383,7 @@ function PublishedShifts({ event }: { event: EventDetail }) {
                       )}
                     </strong>
                     <p>{rangeLabel(shift)}</p>
+                    {shift.mealBreak && <p>Lunch (unpaid): {rangeLabel(shift.mealBreak)} · {scheduledHours(shift)} scheduled work time excluding lunch</p>}
                   </div>
                   <Badge tone="green">Confirmed</Badge>
                 </article>
@@ -1598,6 +1601,13 @@ function RosterBuilder({
       throw new AppError("INVALID_INPUT");
     }
     const issue = rosterProblem(shifts, staff, responses, event.days);
+    const invalidShift = shifts.find((shift) => mealProblem(shift));
+    if (invalidShift) {
+      setProblem(mealProblem(invalidShift)!);
+      setDayId(invalidShift.dayId);
+      setSelectedPerson(invalidShift.memberId);
+      throw new AppError("INVALID_INPUT");
+    }
     if (issue) {
       setProblem(issue.text);
       setDayId(issue.dayId);
@@ -1608,11 +1618,12 @@ function RosterBuilder({
       action: "save_roster",
       eventId: event.id,
       revision: event.revision,
-      shifts: shifts.map(({ memberId, dayId, start, end }) => ({
+      shifts: shifts.map(({ memberId, dayId, start, end, mealBreak }) => ({
         memberId,
         dayId,
         start,
         end,
+        mealBreak: mealBreak || null,
       })),
     });
     setShifts(value.draftShifts || []);
@@ -1696,13 +1707,6 @@ function RosterBuilder({
         <div className="ss-roster-canvas">
           <div className="ss-roster-ruler">
             <span>Staff</span>
-            <div>
-              <span>{timeLabel(day.open)}</span>
-              <span>
-                {timeLabel(Math.round((day.open + day.close) / 30) * 15)}
-              </span>
-              <span>{timeLabel(day.close)}</span>
-            </div>
           </div>
           {staff.map((person) => {
             const blocks =
@@ -1746,7 +1750,7 @@ function RosterBuilder({
                   }
                   onPaint={(block) => {
                     setSelectedPerson(person.id);
-                    const issue = paintProblem(block, blocks, assigned);
+                    const issue = paintProblem(block, blocks, assigned, 180);
                     if (issue) {
                       setProblem(
                         `${displayName(person)} · ${rangeLabel(block)}: ${issue}`,
@@ -1778,9 +1782,22 @@ function RosterBuilder({
                 </button>
                 {selectedPerson === person.id && (
                   <div className="ss-shift-editors ss-inline-editor">
+                    <div className="ss-fill-windows" aria-label="Assign a whole available block">
+                      {freeWindows(blocks, assigned).map((block) => (
+                        <button key={`${block.start}:${block.end}`} disabled={disabled || person.status !== "active" || block.end-block.start < 180}
+                          onClick={() => {
+                            editShifts([...shifts, { ...block, memberId: person.id, id: crypto.randomUUID() }]);
+                            setPendingTimes({ ...pendingTimes, [`${day.id}:${person.id}`]: { start: "", end: "" } });
+                          }}>
+                          Assign {rangeLabel(block)}{block.end-block.start < 180 ? " · under 3 hours" : ""}
+                        </button>
+                      ))}
+                    </div>
                     <TimeRangeEntry
                       key={`${day.id}:${person.id}`}
                       day={day}
+                      windows={freeWindows(blocks, assigned)}
+                      minimum={180}
                       label="Add shift"
                       value={
                         pendingTimes[`${day.id}:${person.id}`] || {
@@ -1798,7 +1815,7 @@ function RosterBuilder({
                         disabled || !blocks.length || person.status !== "active"
                       }
                       onAdd={(block) => {
-                        const issue = paintProblem(block, blocks, assigned);
+                        const issue = paintProblem(block, blocks, assigned, 180);
                         if (issue) {
                           setProblem(
                             `${displayName(person)} · ${rangeLabel(block)}: ${issue}`,
@@ -1826,6 +1843,7 @@ function RosterBuilder({
                         <div className="ss-block-editor" key={shift.id}>
                           <TimeSelect
                             label="Shift starts"
+                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "start", shift.end, 180 + (shift.mealBreak ? shift.mealBreak.end-shift.mealBreak.start : 0))}
                             min={day.open}
                             max={day.close - 15}
                             value={shift.start}
@@ -1842,6 +1860,7 @@ function RosterBuilder({
                           />
                           <TimeSelect
                             label="Shift ends"
+                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "end", shift.start, 180 + (shift.mealBreak ? shift.mealBreak.end-shift.mealBreak.start : 0))}
                             min={day.open + 15}
                             max={day.close}
                             value={shift.end}
@@ -1866,6 +1885,31 @@ function RosterBuilder({
                           >
                             Remove
                           </button>
+                          <div className="ss-meal-editor">
+                            {shift.mealBreak ? <>
+                              <strong>Lunch (unpaid)</strong>
+                              <TimeSelect label="Lunch starts" min={shift.start+15} max={shift.end-30}
+                                value={shift.mealBreak.start} disabled={disabled}
+                                onChange={(start) => editShifts(shifts.map((item) => item.id === shift.id ?
+                                  {...item, mealBreak: {...shift.mealBreak!, start}} : item))} />
+                              <TimeSelect label="Lunch ends" min={shift.start+30} max={shift.end-15}
+                                value={shift.mealBreak.end} disabled={disabled}
+                                onChange={(end) => editShifts(shifts.map((item) => item.id === shift.id ?
+                                  {...item, mealBreak: {...shift.mealBreak!, end}} : item))} />
+                              <button disabled={disabled} onClick={() => editShifts(shifts.map((item) =>
+                                item.id === shift.id ? {...item, mealBreak: null} : item))}>Remove lunch</button>
+                              {mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
+                            </> : <button disabled={disabled || shift.end-shift.start < 195}
+                              onClick={() => {
+                                const duration = Math.min(30, shift.end-shift.start-180);
+                                const start = shift.start + Math.max(15,Math.floor((shift.end-shift.start-duration)/30)*15);
+                                editShifts(shifts.map((item) => item.id === shift.id ?
+                                  {...item, mealBreak: {start, end:start+duration}} : item));
+                              }}>Add unpaid lunch</button>}
+                            <p>{scheduledHours(shift)} scheduled work time{shift.mealBreak ? " excluding unpaid lunch" : ""}</p>
+                            {!shift.mealBreak && shift.end-shift.start < 195 && <p className="ss-muted">Extend the shift to add unpaid lunch and keep 3 work hours.</p>}
+                            {!shift.mealBreak && mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
+                          </div>
                         </div>
                       ))}
                     {!assigned.length && (
@@ -1891,10 +1935,19 @@ function RosterBuilder({
                   ? `Staff still see published version ${event.publicationVersion} until you publish again.`
                   : "Staff cannot see draft shifts."}
               </p>
+              {shifts.some((shift) => mealProblem(shift)) && <div role="alert" className="ss-notice error">
+                {mealProblem(shifts.find((shift) => mealProblem(shift))!)}
+                <button onClick={() => {
+                  const shift = shifts.find((shift) => mealProblem(shift))!;
+                  setDayId(shift.dayId);
+                  setSelectedPerson(shift.memberId);
+                  workspaceRef.current?.focus();
+                }}>Review shift</button>
+              </div>}
             </div>
             <button
               className="primary"
-              disabled={disabled || !dirty}
+              disabled={disabled || !dirty || shifts.some((shift) => mealProblem(shift))}
               onClick={() =>
                 run(
                   save,
@@ -1932,6 +1985,7 @@ function RosterBuilder({
               disabled={
                 disabled ||
                 dirty ||
+                shifts.some((shift) => mealProblem(shift)) ||
                 (event.publicationVersion > 0 && !note.trim())
               }
               className="primary"

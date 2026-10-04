@@ -7,6 +7,7 @@ import {
   dateLabel,
   rangeLabel,
   timeLabel,
+  scheduledHours,
   type Day,
   type EventDetail,
   type Shift,
@@ -38,10 +39,12 @@ function PublishedLane({
             }}
           />
         ))}
+        {shifts.filter((shift) => shift.mealBreak).map((shift) => <span className="ss-lunch-marker" key={`lunch:${shift.id}`}
+          style={{left:`${(shift.mealBreak!.start-day.open)/(day.close-day.open)*100}%`, width:`${(shift.mealBreak!.end-shift.mealBreak!.start)/(day.close-day.open)*100}%`}} />)}
       </div>
       <div className="ss-published-ranges">
         {shifts.length ? (
-          shifts.map((shift) => <span key={shift.id}>{rangeLabel(shift)}</span>)
+          shifts.map((shift) => <span key={shift.id}>{rangeLabel(shift)} · {scheduledHours(shift)} scheduled{shift.mealBreak ? ` · Lunch (unpaid) ${rangeLabel(shift.mealBreak)}` : ""}</span>)
         ) : (
           <span className="ss-muted">No published shift</span>
         )}

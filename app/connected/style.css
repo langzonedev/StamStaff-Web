@@ -1642,6 +1642,22 @@
   min-width: 0;
   position: relative;
 }
+.ss-lane-scroll { overflow-x: auto; max-width: 100%; padding: 3px 0 8px; }
+.ss-lane-canvas { position: relative; }
+.ss-lane-hours { position: relative; height: 30px; margin: 0 1px; font-size: 11px; color: var(--ss-ink); }
+.ss-lane-hours > span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.ss-lane-hours > span:first-child { transform: none; }
+.ss-lane-hours > span:last-child { transform: translateX(-100%); }
+.ss-paint-track .ss-roster-lane { background: var(--ss-wash); }
+.ss-lane-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ss-line); pointer-events: none; }
+.ss-lane-shift-labels { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.ss-lane-shift-labels > span { font-size: 12px; padding: 5px 8px; background: var(--ss-roster); color: white; border-radius: 5px; }
+.ss-fill-windows { display: flex; flex-wrap: wrap; gap: 8px; }
+.ss-roster-row .ss-fill-windows > button { min-height: 44px; font-size: 12px; }
+.ss-meal-editor { grid-column: 1 / -1; min-width: 0; display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 10px; border: 1px solid var(--ss-line); border-radius: 8px; }
+.ss-meal-editor > label { flex: 1 1 100px; min-width: 0; }
+.ss-meal-editor > strong, .ss-meal-editor > p { flex-basis: 100%; }
+.ss-lunch-marker { position: absolute; top: 8px; bottom: 8px; border: 2px dashed var(--ss-ink); background: repeating-linear-gradient(135deg,var(--ss-surface),var(--ss-surface) 4px,var(--ss-line) 4px,var(--ss-line) 7px); pointer-events: none; z-index: 1; }
 .ss-paint-track .ss-roster-lane {
   height: 52px;
   touch-action: pan-y;

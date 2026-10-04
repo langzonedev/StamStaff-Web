@@ -60,6 +60,7 @@ export function TimeSelect({
   min = 0,
   max = 1440,
   disabled = false,
+  options,
 }: {
   label: string;
   value: number;
@@ -67,6 +68,7 @@ export function TimeSelect({
   min?: number;
   max?: number;
   disabled?: boolean;
+  options?: number[];
 }) {
   return (
     <label>
@@ -76,10 +78,13 @@ export function TimeSelect({
         onChange={(event) => onChange(Number(event.target.value))}
         disabled={disabled}
       >
-        {Array.from(
+        {((options && !options.includes(value)) || (!options && (value < min || value > max))) && (
+          <option value={value} disabled>{timeLabel(value)} · unavailable</option>
+        )}
+        {(options || Array.from(
           { length: Math.floor((max - min) / 15) + 1 },
           (_, i) => min + i * 15,
-        ).map((minute) => (
+        )).map((minute) => (
           <option key={minute} value={minute}>
             {timeLabel(minute)}
           </option>

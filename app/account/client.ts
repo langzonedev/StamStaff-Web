@@ -76,6 +76,7 @@ const codes = [
   "LOCKED",
   "OUTSIDE_AVAILABILITY",
   "SHIFT_OVERLAP",
+  "MINIMUM_SHIFT",
   "AVAILABILITY_CLOSED",
   "UNAVAILABLE",
   "NOT_FOUND",
@@ -126,6 +127,8 @@ export function errorMessage(error: unknown) {
       "A shift is outside submitted availability. Check the highlighted availability and adjust the shift.",
     SHIFT_OVERLAP:
       "A shift overlaps another assignment. Adjust its time before saving.",
+    MINIMUM_SHIFT:
+      "Each shift needs at least 3 hours of scheduled work, excluding unpaid lunch. Your edits are kept.",
     invalid_credentials:
       "Check your email and password, or request a password reset.",
     email_not_confirmed:
