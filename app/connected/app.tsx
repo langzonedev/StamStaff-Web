@@ -295,7 +295,14 @@ export default function ConnectedApp({
     receipts.current.clear();
     setNotice(null);
     const { error } = await accountClient().auth.signOut({ scope: "local" });
-    if (error) handleError(error);
+    if (error) {
+      // The provider may retain its session when sign-out fails. Keep the header
+      // truthful and the Sign out action available instead of showing a login.
+      const current = await accountClient().auth.getSession();
+      uid.current = current.data.session?.user.id ?? null;
+      setSession(current.data.session);
+      handleError(error);
+    }
     return !error;
   }
   function navigate(next: Tab) {
@@ -463,7 +470,15 @@ export default function ConnectedApp({
                   });
                   if (result.error) throw result.error;
                   finishRecovery();
-                  if (!(await leave())) return;
+                  if (!(await leave())) {
+                    setNotice({
+                      text: uid.current
+                        ? "Password updated, but sign-out failed. Try signing out again, then sign in with your new password."
+                        : "Password updated. You’re signed out on this device, but the service could not confirm sign-out. Sign in with your new password.",
+                      error: true,
+                    });
+                    return;
+                  }
                   setNotice({
                     text: "Password updated. Sign in with your new password.",
                   });
