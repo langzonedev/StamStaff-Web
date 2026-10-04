@@ -30,6 +30,7 @@ import {
   type Run,
 } from "./ui";
 import { Team, Profile } from "./accounts";
+import { recoveryAfterAuth, withoutRecoveryMarker } from "../account/recovery";
 import { Events } from "./events";
 import "./style.css";
 
@@ -62,6 +63,16 @@ export default function ConnectedApp({
     lock = useRef(false),
     receipts = useRef(new Map<string, string>());
   const authority = useRef<string | null>(null);
+  const recoveryIntent = useRef(false);
+  function finishRecovery() {
+    recoveryIntent.current = false;
+    setRecovery(false);
+    window.history.replaceState(
+      null,
+      "",
+      withoutRecoveryMarker(window.location.href),
+    );
+  }
   const onboardingNameInput = useRef<HTMLInputElement>(null);
   const acceptAccount = useCallback((value: AccountState) => {
     const next = `${value.member.id}:${value.member.role}:${value.member.isAdmin}:${value.member.status}`;
@@ -180,8 +191,10 @@ export default function ConnectedApp({
     const wantsRecovery =
       url.searchParams.get("recovery") === "1" ||
       hash.get("type") === "recovery";
+    recoveryIntent.current = wantsRecovery;
     if (wantsRecovery) queueMicrotask(() => setRecovery(true));
     if (hash.has("error") || hash.has("error_code")) {
+      recoveryIntent.current = false;
       queueMicrotask(() => {
         setNotice({
           text: "This email link is invalid or expired. Request a new verification or password reset email.",
@@ -205,18 +218,28 @@ export default function ConnectedApp({
         setPassword("");
         setNotice(null);
         setGate("");
-        setRecovery(Boolean(next && wantsRecovery));
         setDirty(false);
         setReauth(false);
         receipts.current.clear();
       }
       if (event === "SIGNED_OUT") {
+        recoveryIntent.current = false;
+        window.history.replaceState(
+          null,
+          "",
+          withoutRecoveryMarker(window.location.href),
+        );
         setEmailReady(false);
         setPasswordReady(false);
         setEmail("");
         setMode("signin");
       }
-      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+      recoveryIntent.current = recoveryAfterAuth(
+        recoveryIntent.current,
+        event,
+        Boolean(next),
+      );
+      setRecovery(recoveryIntent.current);
       setSession(next);
       setReady(true);
       if (!next) return;
@@ -224,7 +247,7 @@ export default function ConnectedApp({
         window.history.replaceState(
           null,
           "",
-          window.location.pathname + (wantsRecovery ? "?recovery=1" : ""),
+          window.location.pathname + (recoveryIntent.current ? "?recovery=1" : ""),
         );
       // Keep asynchronous RPCs outside Supabase's synchronous auth callback lock.
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN")
@@ -252,7 +275,8 @@ export default function ConnectedApp({
 
   async function leave() {
     if (dirty && !window.confirm("Discard unsaved changes and sign out?"))
-      return;
+      return false;
+    finishRecovery();
     ++epoch.current;
     uid.current = null;
     setAccount(null);
@@ -271,7 +295,15 @@ export default function ConnectedApp({
     receipts.current.clear();
     setNotice(null);
     const { error } = await accountClient().auth.signOut({ scope: "local" });
-    if (error) handleError(error);
+    if (error) {
+      // The provider may retain its session when sign-out fails. Keep the header
+      // truthful and the Sign out action available instead of showing a login.
+      const current = await accountClient().auth.getSession();
+      uid.current = current.data.session?.user.id ?? null;
+      setSession(current.data.session);
+      handleError(error);
+    }
+    return !error;
   }
   function navigate(next: Tab) {
     if (next === tab) return;
@@ -290,6 +322,7 @@ export default function ConnectedApp({
     setPassword("");
     await run(async () => {
       if (mode === "signin") {
+        finishRecovery();
         const result = await accountClient().auth.signInWithPassword({
           email: email.trim(),
           password: secret,
@@ -436,12 +469,16 @@ export default function ConnectedApp({
                     password: secret,
                   });
                   if (result.error) throw result.error;
-                  await leave();
-                  window.history.replaceState(
-                    null,
-                    "",
-                    window.location.pathname,
-                  );
+                  finishRecovery();
+                  if (!(await leave())) {
+                    setNotice({
+                      text: uid.current
+                        ? "Password updated, but sign-out failed. Try signing out again, then sign in with your new password."
+                        : "Password updated. You’re signed out on this device, but the service could not confirm sign-out. Sign in with your new password.",
+                      error: true,
+                    });
+                    return;
+                  }
                   setNotice({
                     text: "Password updated. Sign in with your new password.",
                   });
