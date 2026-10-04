@@ -77,6 +77,7 @@ const codes = [
   "OUTSIDE_AVAILABILITY",
   "SHIFT_OVERLAP",
   "MINIMUM_SHIFT",
+  "ACCOUNT_IN_USE",
   "AVAILABILITY_CLOSED",
   "UNAVAILABLE",
   "NOT_FOUND",
@@ -129,6 +130,8 @@ export function errorMessage(error: unknown) {
       "A shift overlaps another assignment. Adjust its time before saving.",
     MINIMUM_SHIFT:
       "Each shift needs at least 3 hours of scheduled work, excluding unpaid lunch. Your edits are kept.",
+    ACCOUNT_IN_USE:
+      "This account has been set up or has saved history. Refresh team and disable access instead.",
     invalid_credentials:
       "Check your email and password, or request a password reset.",
     email_not_confirmed:
