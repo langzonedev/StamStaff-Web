@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { displayName } from "../account/client";
 import { Badge, Empty, Panel } from "./ui";
+import { ResponseBadge } from "./shift-responses";
 import {
   chronologicalShifts,
   dateLabel,
@@ -39,12 +40,10 @@ function PublishedLane({
             }}
           />
         ))}
-        {shifts.filter((shift) => shift.mealBreak).map((shift) => <span className="ss-lunch-marker" key={`lunch:${shift.id}`}
-          style={{left:`${(shift.mealBreak!.start-day.open)/(day.close-day.open)*100}%`, width:`${(shift.mealBreak!.end-shift.mealBreak!.start)/(day.close-day.open)*100}%`}} />)}
       </div>
       <div className="ss-published-ranges">
         {shifts.length ? (
-          shifts.map((shift) => <span key={shift.id}>{rangeLabel(shift)} · {scheduledHours(shift)} scheduled{shift.mealBreak ? ` · Lunch (unpaid) ${rangeLabel(shift.mealBreak)}` : ""}</span>)
+          shifts.map((shift) => <div key={shift.id}><span>{rangeLabel(shift)} · {scheduledHours(shift)}</span><ResponseBadge shift={shift} />{shift.acknowledgement?.status === "declined" && <p className="ss-decline-reason">{shift.acknowledgement.reason}</p>}</div>)
         ) : (
           <span className="ss-muted">No published shift</span>
         )}
@@ -52,7 +51,7 @@ function PublishedLane({
     </div>
   );
 }
-export function PublishedRoster({ event }: { event: EventDetail }) {
+export function PublishedRoster({ event, onReview }: { event: EventDetail; onReview?: (memberId:string,dayId:string)=>void }) {
   const [view, setView] = useState<"day" | "event">("day"),
     [dayId, setDayId] = useState(event.days[0]?.id || "");
   const scroll = useRef<HTMLDivElement>(null),
@@ -92,6 +91,8 @@ export function PublishedRoster({ event }: { event: EventDetail }) {
       title="Published roster"
       action={<Badge tone="green">Version {event.publicationVersion}</Badge>}
     >
+      <div className="ss-badges ss-response-summary"><Badge tone="green">{shifts.filter(shift=>shift.acknowledgement?.status === "confirmed").length} confirmed</Badge><Badge>{shifts.filter(shift=>!shift.acknowledgement || shift.acknowledgement.status === "pending").length} awaiting response</Badge><Badge tone="amber">{shifts.filter(shift=>shift.acknowledgement?.status === "declined").length} declined</Badge></div>
+      {shifts.some(shift=>shift.acknowledgement?.status === "declined") && <div className="ss-notice" role="status"><strong>Declined shifts · manager review</strong>{shifts.filter(shift=>shift.acknowledgement?.status === "declined").map(shift=><div key={shift.id}><p><strong>{displayName(staff.find(person=>person.id === shift.memberId)!)}</strong> · {dateLabel(days.find(day=>day.id===shift.dayId)!.date)} · {rangeLabel(shift)}</p><p className="ss-decline-reason">{shift.acknowledgement?.reason}</p>{onReview && <button onClick={()=>onReview(shift.memberId,shift.dayId)}>Review in roster builder</button>}</div>)}</div>}
       <div className="ss-published-meta">
         <span>
           {shifts.length} {shifts.length === 1 ? "shift" : "shifts"} ·{" "}

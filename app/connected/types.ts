@@ -1,17 +1,16 @@
 export type Day = { id: string; date: string; open: number; close: number };
 export type Block = { dayId: string; start: number; end: number };
-export type Shift = Block & { id: string; memberId: string; mealBreak?: { start: number; end: number } | null };
-export function mealProblem(shift: Shift): string | null {
-  const meal = shift.mealBreak;
-  if (meal && (meal.start <= shift.start || meal.end >= shift.end || meal.start >= meal.end || meal.start % 15 || meal.end % 15))
-    return "Keep lunch entirely inside the shift, in 15-minute steps.";
-  return shift.end-shift.start-(meal ? meal.end-meal.start : 0) < 180
-    ? "A shift needs at least 3 hours of scheduled work, excluding unpaid lunch." : null;
+export type Shift = Block & { id: string; memberId: string; mealBreak?: { start: number; end: number } | null; acknowledgement?: Acknowledgement };
+export function shiftProblem(shift: Shift): string | null {
+  return shift.end-shift.start < 180 ? "A shift needs at least 3 hours." : null;
 }
 export function scheduledHours(shift: Shift): string {
-  const minutes = shift.end - shift.start - (shift.mealBreak ? shift.mealBreak.end-shift.mealBreak.start : 0);
+  const minutes = shift.end - shift.start;
   return `${Math.floor(minutes/60)}h${minutes%60 ? ` ${minutes%60}m` : ""}`;
 }
+export type EventInfo = {location:string; address:string; parking:string; tickets:string; notes:string; bannerPath:string|null};
+export const emptyEventInfo: EventInfo = {location:"", address:"", parking:"", tickets:"", notes:"", bannerPath:null};
+export type Acknowledgement = {status:"pending"|"confirmed"|"declined"; reason:string|null; respondedAt:string|null};
 export type Response = {
   memberId: string;
   status: "draft" | "submitted";
@@ -28,6 +27,7 @@ export type EventSummary = {
   revision: number;
   status: "draft" | "published" | "archived";
   availabilityOpen: boolean;
+  details?: EventInfo;
   days: Day[];
   publicationVersion: number;
   publishedAt: string | null;

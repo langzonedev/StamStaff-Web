@@ -145,8 +145,9 @@ export function PrivacyNotice() {
         availability; staff see only their own records.
       </p>
       <p>
-        Availability changes and their comments are retained with event history
-        for manager review. Comments only need to explain changes to your hours.
+        Shift responses and decline reasons are retained with event history for
+        manager review. Feedback is visible to you and your managers, and is
+        stored separately from your roster. Avoid sensitive personal details.
       </p>
       <p>
         Core account and roster data is hosted in Australia. Email delivery and

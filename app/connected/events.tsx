@@ -15,7 +15,9 @@ import { PublishedRoster } from "./published-roster";
 import { RosterLane } from "./roster-lane";
 import { freeWindows, paintProblem, windowTimes } from "./paint";
 import { TimeRangeEntry, type TimeDraft } from "./time-range-entry";
-import { AvailabilityUpdates } from "./availability-updates";
+import { EventInformation, EventBanner } from "./event-details";
+import { ShiftResponse } from "./shift-responses";
+import { NotificationStatus, deliverNotifications } from "./notification-status";
 import {
   chronologicalEvents,
   chronologicalShifts,
@@ -23,8 +25,7 @@ import {
   rangeLabel,
   rosterProblem,
   timeLabel,
-  mealProblem,
-  scheduledHours,
+  shiftProblem,
   validateBlocks,
   type Block,
   type Day,
@@ -46,10 +47,10 @@ const statusLabel = (event: EventSummary) =>
     ? "Event draft"
     : event.status === "archived"
       ? "Archived"
-      : event.availabilityOpen
-        ? "Availability open"
-        : event.publicationVersion
-          ? "Roster published"
+      : event.publicationVersion
+        ? "Roster published"
+        : event.availabilityOpen
+          ? "Availability open"
           : "Building roster";
 const dayRange = (event: EventSummary) =>
   event.days.length
@@ -71,6 +72,7 @@ export function Events({
     [viewKey, setViewKey] = useState(0),
     [dirty, setDirty] = useState(false),
     [archive, setArchive] = useState(false);
+  const deepLinkConsumed = useRef(false);
   useEffect(() => {
     let alive = true;
     void request<EventSummary[]>("events_list_v1")
@@ -78,6 +80,9 @@ export function Events({
         if (alive) {
           setEvents(chronologicalEvents(value));
           setLoaded(true);
+          const target = deepLinkConsumed.current ? null : new URLSearchParams(window.location.search).get("event");
+          deepLinkConsumed.current = true;
+          if (target && value.some(event => event.id === target)) void request<EventDetail>("event_get_v1", {eventId: target}).then(detail=>{if(alive)setSelected(detail);}).catch(()=>{});
         }
       })
       .catch(() => {
@@ -164,6 +169,7 @@ export function Events({
         </div>
       </div>
       {creating || selected?.status === "draft" ? (
+        <>
         <EventEditor
           key={selected?.id || "new"}
           event={selected}
@@ -173,6 +179,8 @@ export function Events({
           saved={saved}
           onDirty={setDirty}
         />
+        {selected && <EventInformation event={selected} manager={manager} mutate={mutate} run={run} disabled={disabled} blocked={dirty} saved={saved} onDirty={setDirty} />}
+        </>
       ) : selected ? (
         <>
           <div className="ss-event-toolbar">
@@ -198,6 +206,7 @@ export function Events({
             key={`${selected.id}:${viewKey}`}
             event={selected}
             member={member}
+            request={request}
             mutate={mutate}
             run={run}
             disabled={disabled}
@@ -247,6 +256,7 @@ export function Events({
                 .filter((event) => archive || event.status !== "archived")
                 .map((event) => (
                   <article className="ss-event-card" key={event.id}>
+                    <EventBanner event={event} />
                     <div className="ss-card-top">
                       <span className="ss-date-tile" aria-hidden="true">
                         {event.days[0]?.date.slice(8) || "—"}
@@ -266,6 +276,7 @@ export function Events({
                       </Badge>
                     </div>
                     <h3>{event.name}</h3>
+                    {event.details?.location && <p>{event.details.location}</p>}
                     <p>{dayRange(event)}</p>
                     <p className="ss-help">
                       {event.days.length}{" "}
@@ -277,7 +288,7 @@ export function Events({
                     >
                       {manager
                         ? "Open event"
-                        : event.availabilityOpen
+                        : event.availabilityOpen && !event.publicationVersion
                           ? "View & add availability"
                           : "View my shifts"}
                       <span aria-hidden="true"> →</span>
@@ -418,7 +429,7 @@ function EventEditor({
                   value={from}
                   onChange={(e) => {
                     setFrom(e.target.value);
-                    if (!to) setTo(e.target.value);
+                    if (!to || to === from) setTo(e.target.value);
                   }}
                 />
               </label>
@@ -545,7 +556,8 @@ function EventEditor({
                   revision: event.revision,
                 }),
               );
-            }, "Event published. Staff can now submit availability.");
+              void deliverNotifications(event.id);
+            }, "Event published. Staff can now submit availability. Email notifications queued.");
           }}
         >
           <p>
@@ -562,6 +574,7 @@ function EventEditor({
 function EventWorkspace({
   event,
   member,
+  request,
   mutate,
   run,
   disabled,
@@ -572,6 +585,7 @@ function EventWorkspace({
   dirty: boolean;
   event: EventDetail;
   member: Member;
+  request: Request;
   mutate: Mutate;
   run: Run;
   disabled: boolean;
@@ -606,15 +620,9 @@ function EventWorkspace({
   }
   return (
     <>
+      <EventInformation event={event} manager={manager} mutate={mutate} run={run} disabled={disabled} blocked={dirty} saved={saved} onDirty={onDirty} />
       {manager ? (
         <>
-          <AvailabilityUpdates
-            event={event}
-            onReview={(memberId, dayId) => {
-              setReviewTarget({ memberId, dayId });
-              setSection("roster");
-            }}
-          />
           <div className="ss-section-tabs">
             <button
               aria-pressed={section === "availability"}
@@ -660,7 +668,8 @@ function EventWorkspace({
             />
           </div>
           <div hidden={section !== "published"}>
-            <PublishedRoster event={event} />
+            <PublishedRoster event={event} onReview={(memberId,dayId)=>{setReviewTarget({memberId,dayId});setSection("roster");}} />
+            <NotificationStatus eventId={event.id} revision={event.revision} request={request} mutate={mutate} run={run} disabled={disabled} />
           </div>
           {event.status !== "archived" && (
             <details className="ss-options">
@@ -671,7 +680,7 @@ function EventWorkspace({
                 </p>
               )}
               <div className="ss-actions">
-                <button
+                {(event.publicationVersion === 0 || event.availabilityOpen) && <button
                   disabled={disabled || dirty}
                   onClick={() =>
                     setConfirmAction(
@@ -684,7 +693,7 @@ function EventWorkspace({
                   {event.availabilityOpen
                     ? "Close availability"
                     : "Reopen availability"}
-                </button>
+                </button>}
                 <button
                   disabled={disabled || dirty}
                   onClick={() => setConfirmAction("archive_event")}
@@ -698,25 +707,25 @@ function EventWorkspace({
       ) : (
         <>
           <div
-            className={`ss-staff-workspace ${event.availabilityOpen ? "open" : "closed"}`}
+            className="ss-staff-workspace"
           >
-            {event.publicationVersion > 0 && <PublishedShifts event={event} />}
+            {event.publicationVersion > 0 && <PublishedShifts event={event} mutate={mutate} run={run} disabled={disabled || event.status === "archived"} saved={saved} onDirty={onDirty} />}
             <div>
-              <AvailabilityEditor
+              {event.publicationVersion > 0 ? <SubmittedAvailability event={event} /> : <AvailabilityEditor
                 event={event}
                 mutate={mutate}
                 run={run}
                 disabled={
                   disabled ||
-                  (!event.availabilityOpen && event.publicationVersion === 0) ||
+                  !event.availabilityOpen ||
                   event.status !== "published"
                 }
                 saved={saved}
                 onDirty={onDirty}
-              />
+              />}
             </div>
             {event.publicationVersion === 0 && !event.availabilityOpen && (
-              <PublishedShifts event={event} />
+              <PublishedShifts event={event} mutate={mutate} run={run} disabled={disabled} saved={saved} onDirty={onDirty} />
             )}
           </div>
         </>
@@ -757,9 +766,9 @@ function EventWorkspace({
               ? "This event moves into history. Existing published shifts are retained."
               : confirmAction === "close_availability"
                 ? event.publicationVersion > 0
-                  ? "Initial availability collection will close. Staff can still report later changes with a comment; confirmed shifts remain unchanged."
-                  : "Staff will no longer be able to edit their responses until you reopen availability or publish a roster."
-                : "Staff can revise availability. Existing published shifts remain visible; review your roster before publishing another version."}
+                  ? "Staff availability remains locked. You can amend the roster."
+                  : "Staff can no longer edit availability. You can reopen collection before the first roster is published."
+                : event.publicationVersion > 0 ? "Published availability remains locked. Staff must contact their manager for changes." : "Staff can revise their availability until you publish the roster."}
           </p>
         </Confirm>
       )}
@@ -906,10 +915,6 @@ function AvailabilityEditor({
     ),
     [selectedDayId, setSelectedDayId] = useState(event.days[0]?.id || ""),
     [error, setError] = useState(""),
-    [editing, setEditing] = useState(false),
-    [note, setNote] = useState(""),
-    [confirmChange, setConfirmChange] = useState(false),
-    [confirmDiscard, setConfirmDiscard] = useState(false),
     [pendingTimes, setPendingTimes] = useState<Record<string, TimeDraft>>({});
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -921,18 +926,9 @@ function AvailabilityEditor({
   const postPublication = event.publicationVersion > 0;
   const editable =
     event.status === "published" &&
-    (postPublication ? editing : event.availabilityOpen);
-  const affectedShifts = event.ownShifts.filter(
-    (shift) =>
-      !blocks.some(
-        (block) =>
-          block.dayId === shift.dayId &&
-          block.start <= shift.start &&
-          block.end >= shift.end,
-      ),
-  );
+    !postPublication && event.availabilityOpen;
   const dirty =
-    JSON.stringify(blocks) !== baseline || Boolean(note) || hasPendingTimes;
+    JSON.stringify(blocks) !== baseline || hasPendingTimes;
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
   function add(block: Block) {
     const merged = mergeBlocks(blocks, block);
@@ -945,16 +941,6 @@ function AvailabilityEditor({
       setError("");
       return true;
     }
-  }
-  function discardChanges() {
-    const submitted = event.ownResponse?.blocks || [];
-    setBlocks(submitted);
-    setBaseline(JSON.stringify(submitted));
-    setPendingTimes({});
-    setNote("");
-    setError("");
-    setEditing(false);
-    setConfirmDiscard(false);
   }
   async function save(status: "draft" | "submitted") {
     if (hasPendingTimes) {
@@ -977,10 +963,6 @@ function AvailabilityEditor({
       if (invalidDay) setSelectedDayId(invalidDay.id);
       throw new AppError("INVALID_INPUT");
     }
-    if (postPublication && !note.trim()) {
-      setError("Add a comment for your manager before submitting.");
-      throw new AppError("INVALID_INPUT");
-    }
     const value = await mutate<EventDetail>("event_command_v1", {
       action: "save_availability",
       eventId: event.id,
@@ -988,12 +970,9 @@ function AvailabilityEditor({
       responseRevision: event.ownResponse?.revision ?? 0,
       responseStatus: status,
       blocks,
-      ...(postPublication ? { changeNote: note.trim() } : {}),
     });
     setBaseline(JSON.stringify(value.ownResponse?.blocks || []));
     setBlocks(value.ownResponse?.blocks || []);
-    setNote("");
-    setEditing(false);
     saved(value);
   }
   return (
@@ -1017,18 +996,6 @@ function AvailabilityEditor({
         </Badge>
       }
     >
-      {postPublication && event.status === "published" && !editing && (
-        <button
-          className="primary"
-          disabled={disabled}
-          onClick={() => setEditing(true)}
-        >
-          Change availability
-        </button>
-      )}
-      {postPublication && event.ownResponse?.changeNote && !editing && (
-        <p className="ss-help">Last update: {event.ownResponse.changeNote}</p>
-      )}
       {!editable && (
         <div className="ss-trading-summary">
           {event.days.map((day) => (
@@ -1210,192 +1177,29 @@ function AvailabilityEditor({
           })}
         </details>
       )}
-      {editable && postPublication && (
-        <label className="ss-change-comment">
-          Comment for your manager (required)
-          <textarea
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            disabled={disabled}
-          />
-        </label>
-      )}
-      {editable && postPublication && (
-        <p className="ss-notice">
-          Your confirmed shifts do not change until your manager publishes an
-          updated roster.
-        </p>
-      )}
-      {editable && (
-        <div className="ss-save-bar">
-          <div>
-            <strong>
-              {dirty
-                ? "Unsaved changes"
-                : event.ownResponse?.status === "submitted"
-                  ? "Availability submitted"
-                  : "Ready when you are"}
-            </strong>
-            {!postPublication && event.ownResponse?.status === "submitted" && (
-              <p>Saving a private draft withdraws your submitted response.</p>
-            )}
-            {blocks.length === 0 && (
-              <p>Submitting means unavailable for every event day.</p>
-            )}
-          </div>
-          <div className="ss-actions">
-            {postPublication && (
-              <button
-                disabled={disabled}
-                onClick={() => {
-                  if (dirty) setConfirmDiscard(true);
-                  else discardChanges();
-                }}
-              >
-                Cancel changes
-              </button>
-            )}
-            {!postPublication && (
-              <button
-                disabled={disabled}
-                onClick={() =>
-                  run(
-                    () => save("draft"),
-                    "Private draft saved. Submit when you are ready to share it.",
-                  )
-                }
-              >
-                Save private draft
-              </button>
-            )}
-            <button
-              className="primary"
-              disabled={
-                disabled || (postPublication && (!note.trim() || !dirty))
-              }
-              onClick={() => {
-                if (postPublication && affectedShifts.length)
-                  setConfirmChange(true);
-                else
-                  void run(
-                    () => save("submitted"),
-                    "Availability submitted to your manager.",
-                  );
-              }}
-            >
-              {postPublication
-                ? "Submit updated availability"
-                : "Submit availability"}
-            </button>
-          </div>
-        </div>
-      )}
-      {confirmDiscard && (
-        <Confirm
-          title="Discard availability changes?"
-          label="Discard changes"
-          busy={disabled}
-          cancel={() => setConfirmDiscard(false)}
-          accept={discardChanges}
-        >
-          <p>
-            Your last submitted availability and confirmed shifts stay
-            unchanged.
-          </p>
-        </Confirm>
-      )}
-      {confirmChange && (
-        <Confirm
-          title="Change availability for confirmed shifts?"
-          label="Submit updated availability"
-          busy={disabled}
-          cancel={() => setConfirmChange(false)}
-          accept={() => {
-            setConfirmChange(false);
-            void run(
-              () => save("submitted"),
-              "Updated availability sent to your manager. Your confirmed shifts remain unchanged.",
-            );
-          }}
-        >
-          <p>These confirmed shifts fall outside your updated availability:</p>
-          <ul>
-            {affectedShifts.map((shift) => (
-              <li key={shift.id}>
-                {dateLabel(
-                  event.days.find((day) => day.id === shift.dayId)!.date,
-                )}{" "}
-                · {rangeLabel(shift)}
-              </li>
-            ))}
-          </ul>
-          <p>
-            Your manager needs to review them. Your confirmed shifts remain
-            unchanged until an updated roster is published.
-          </p>
-        </Confirm>
-      )}
+      {editable && <div className="ss-save-bar"><div><strong>{dirty ? "Unsaved changes" : event.ownResponse?.status === "submitted" ? "Availability submitted" : "Ready when you are"}</strong>{!blocks.length && <p>Submitting means unavailable for every event day.</p>}</div><div className="ss-actions"><button disabled={disabled} onClick={()=>run(()=>save("draft"),"Private draft saved. Submit when ready to share it.")}>Save private draft</button><button className="primary" disabled={disabled} onClick={()=>run(()=>save("submitted"),"Availability submitted to your manager.")}>Submit availability</button></div></div>}
     </Panel>
   );
 }
 
-function PublishedShifts({ event }: { event: EventDetail }) {
-  if (event.publicationVersion === 0 && event.availabilityOpen) return null;
-  return (
-    <Panel
-      title="Your confirmed shifts"
-      action={
-        event.publicationVersion > 0 ? (
-          <Badge tone="purple">Version {event.publicationVersion}</Badge>
-        ) : undefined
-      }
-    >
-      {event.publicationVersion === 0 ? (
-        <p>The roster has not been published yet.</p>
-      ) : (
-        <>
-          <p className="ss-help">
-            Published{" "}
-            {event.publishedAt
-              ? new Intl.DateTimeFormat("en-AU", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                  timeZone: "Australia/Adelaide",
-                }).format(new Date(event.publishedAt))
-              : ""}{" "}
-            · Adelaide time
-          </p>
-          {event.changeNote && (
-            <p className="ss-notice">Update: {event.changeNote}</p>
-          )}
-          {event.ownShifts.length ? (
-            <div className="ss-shifts">
-              {chronologicalShifts(event.ownShifts, event.days).map((shift) => (
-                <article key={shift.id}>
-                  <span className="ss-shift-check" aria-hidden="true">
-                    ✓
-                  </span>
-                  <div>
-                    <strong>
-                      {dateLabel(
-                        event.days.find((day) => day.id === shift.dayId)!.date,
-                      )}
-                    </strong>
-                    <p>{rangeLabel(shift)}</p>
-                    {shift.mealBreak && <p>Lunch (unpaid): {rangeLabel(shift.mealBreak)} · {scheduledHours(shift)} scheduled work time excluding lunch</p>}
-                  </div>
-                  <Badge tone="green">Confirmed</Badge>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>No shifts have been assigned to you in this published roster.</p>
-          )}
-        </>
-      )}
-    </Panel>
-  );
+function SubmittedAvailability({event}:{event:EventDetail}) {
+  return <details className="ss-options"><summary>Submitted availability · locked</summary>
+    {event.days.map(day => <div key={day.id}><strong>{dateLabel(day.date)}</strong><p>{event.ownResponse?.blocks.filter(b=>b.dayId===day.id).map(rangeLabel).join(", ") || "Unavailable"}</p></div>)}
+    <p className="ss-help">Contact your manager if your circumstances change.</p>
+  </details>;
+}
+function PublishedShifts({event,mutate,run,disabled,saved,onDirty}:{event:EventDetail;mutate:Mutate;run:Run;disabled:boolean;saved:(event:EventDetail)=>void;onDirty:(dirty:boolean)=>void}) {
+  if (!event.publicationVersion && event.availabilityOpen) return null;
+  return <Panel title="Your shifts" action={event.publicationVersion > 0 ? <Badge>Roster published · locked</Badge> : undefined}>
+    {!event.publicationVersion ? <p>The roster has not been published yet.</p> : <>
+      {event.changeNote && <p className="ss-publication-note">{event.changeNote}</p>}
+      {event.ownShifts.length ? <div className="ss-shifts">{chronologicalShifts(event.ownShifts,event.days).map(shift=><article key={`${event.publicationVersion}:${shift.id}`}>
+        <div className="ss-shift-content"><strong>{dateLabel(event.days.find(day=>day.id===shift.dayId)!.date)}</strong><p className="ss-shift-time">{rangeLabel(shift)}</p>
+        <ShiftResponse shift={shift} event={event} mutate={mutate} run={run} disabled={disabled} saved={saved} onDirty={onDirty} /></div>
+      </article>)}</div> : <p>No shifts assigned to you.</p>}
+      <p className="ss-help">Need a change? Contact your manager. Your shift stays assigned until your manager changes it.</p>
+    </>}
+  </Panel>;
 }
 
 function ManagerAvailability({ event }: { event: EventDetail }) {
@@ -1601,9 +1405,9 @@ function RosterBuilder({
       throw new AppError("INVALID_INPUT");
     }
     const issue = rosterProblem(shifts, staff, responses, event.days);
-    const invalidShift = shifts.find((shift) => mealProblem(shift));
+    const invalidShift = shifts.find((shift) => shiftProblem(shift));
     if (invalidShift) {
-      setProblem(mealProblem(invalidShift)!);
+      setProblem(shiftProblem(invalidShift)!);
       setDayId(invalidShift.dayId);
       setSelectedPerson(invalidShift.memberId);
       throw new AppError("INVALID_INPUT");
@@ -1618,12 +1422,11 @@ function RosterBuilder({
       action: "save_roster",
       eventId: event.id,
       revision: event.revision,
-      shifts: shifts.map(({ memberId, dayId, start, end, mealBreak }) => ({
+      shifts: shifts.map(({ memberId, dayId, start, end }) => ({
         memberId,
         dayId,
         start,
         end,
-        mealBreak: mealBreak || null,
       })),
     });
     setShifts(value.draftShifts || []);
@@ -1641,6 +1444,7 @@ function RosterBuilder({
         </Badge>
       }
     >
+      {event.draftShifts?.some(shift=>shift.mealBreak) && <p className="ss-notice">Existing break details will be removed when you next save this draft. Published history is retained.</p>}
       {event.availabilityOpen && (
         <div className="ss-notice warning ss-roster-next">
           <div>
@@ -1843,7 +1647,7 @@ function RosterBuilder({
                         <div className="ss-block-editor" key={shift.id}>
                           <TimeSelect
                             label="Shift starts"
-                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "start", shift.end, 180 + (shift.mealBreak ? shift.mealBreak.end-shift.mealBreak.start : 0))}
+                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "start", shift.end, 180)}
                             min={day.open}
                             max={day.close - 15}
                             value={shift.start}
@@ -1860,7 +1664,7 @@ function RosterBuilder({
                           />
                           <TimeSelect
                             label="Shift ends"
-                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "end", shift.start, 180 + (shift.mealBreak ? shift.mealBreak.end-shift.mealBreak.start : 0))}
+                            options={windowTimes(freeWindows(blocks, assigned.filter((item) => item.id !== shift.id)), "end", shift.start, 180)}
                             min={day.open + 15}
                             max={day.close}
                             value={shift.end}
@@ -1885,31 +1689,6 @@ function RosterBuilder({
                           >
                             Remove
                           </button>
-                          <div className="ss-meal-editor">
-                            {shift.mealBreak ? <>
-                              <strong>Lunch (unpaid)</strong>
-                              <TimeSelect label="Lunch starts" min={shift.start+15} max={shift.end-30}
-                                value={shift.mealBreak.start} disabled={disabled}
-                                onChange={(start) => editShifts(shifts.map((item) => item.id === shift.id ?
-                                  {...item, mealBreak: {...shift.mealBreak!, start}} : item))} />
-                              <TimeSelect label="Lunch ends" min={shift.start+30} max={shift.end-15}
-                                value={shift.mealBreak.end} disabled={disabled}
-                                onChange={(end) => editShifts(shifts.map((item) => item.id === shift.id ?
-                                  {...item, mealBreak: {...shift.mealBreak!, end}} : item))} />
-                              <button disabled={disabled} onClick={() => editShifts(shifts.map((item) =>
-                                item.id === shift.id ? {...item, mealBreak: null} : item))}>Remove lunch</button>
-                              {mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
-                            </> : <button disabled={disabled || shift.end-shift.start < 195}
-                              onClick={() => {
-                                const duration = Math.min(30, shift.end-shift.start-180);
-                                const start = shift.start + Math.max(15,Math.floor((shift.end-shift.start-duration)/30)*15);
-                                editShifts(shifts.map((item) => item.id === shift.id ?
-                                  {...item, mealBreak: {start, end:start+duration}} : item));
-                              }}>Add unpaid lunch</button>}
-                            <p>{scheduledHours(shift)} scheduled work time{shift.mealBreak ? " excluding unpaid lunch" : ""}</p>
-                            {!shift.mealBreak && shift.end-shift.start < 195 && <p className="ss-muted">Extend the shift to add unpaid lunch and keep 3 work hours.</p>}
-                            {!shift.mealBreak && mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
-                          </div>
                         </div>
                       ))}
                     {!assigned.length && (
@@ -1935,10 +1714,10 @@ function RosterBuilder({
                   ? `Staff still see published version ${event.publicationVersion} until you publish again.`
                   : "Staff cannot see draft shifts."}
               </p>
-              {shifts.some((shift) => mealProblem(shift)) && <div role="alert" className="ss-notice error">
-                {mealProblem(shifts.find((shift) => mealProblem(shift))!)}
+              {shifts.some((shift) => shiftProblem(shift)) && <div role="alert" className="ss-notice error">
+                {shiftProblem(shifts.find((shift) => shiftProblem(shift))!)}
                 <button onClick={() => {
-                  const shift = shifts.find((shift) => mealProblem(shift))!;
+                  const shift = shifts.find((shift) => shiftProblem(shift))!;
                   setDayId(shift.dayId);
                   setSelectedPerson(shift.memberId);
                   workspaceRef.current?.focus();
@@ -1947,7 +1726,7 @@ function RosterBuilder({
             </div>
             <button
               className="primary"
-              disabled={disabled || !dirty || shifts.some((shift) => mealProblem(shift))}
+              disabled={disabled || (!dirty && !shifts.some(shift=>shift.mealBreak)) || shifts.some((shift) => shiftProblem(shift))}
               onClick={() =>
                 run(
                   save,
@@ -1985,7 +1764,7 @@ function RosterBuilder({
               disabled={
                 disabled ||
                 dirty ||
-                shifts.some((shift) => mealProblem(shift)) ||
+                shifts.some((shift) => shiftProblem(shift)) ||
                 (event.publicationVersion > 0 && !note.trim())
               }
               className="primary"
@@ -2028,7 +1807,8 @@ function RosterBuilder({
               });
               setNote("");
               saved(value);
-            }, "Roster published. Staff can see their own confirmed shifts in the app.");
+              void deliverNotifications(event.id);
+            }, "Roster published. Staff can respond to their shifts. Email notifications queued.");
           }}
         >
           <p>
