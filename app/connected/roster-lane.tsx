@@ -35,10 +35,10 @@ export function RosterLane({
   }
   return (
     <div className="ss-paint-track">
-      <div className="ss-lane-scroll" tabIndex={0} aria-label={`${name} hourly shift timeline`}>
-      <div className="ss-lane-canvas" style={{ minWidth: `${Math.max(320, (day.close - day.open) / 60 * 64)}px` }}>
+      <div className="ss-lane-scroll">
+      <div className="ss-lane-canvas">
       <div className="ss-lane-hours" aria-hidden="true">
-        {ticks.map((m) => <span key={m} style={{left:`${(m-day.open)/(day.close-day.open)*100}%`}}>{timeLabel(m)}</span>)}
+        {ticks.map((m, i) => <span key={m} className={m !== day.open && m !== day.close && (i % 2 || m - day.open < 90 || day.close - m < 90) ? "ss-hour-minor" : ""} style={{left:`${(m-day.open)/(day.close-day.open)*100}%`}}>{m === day.open || m === day.close ? timeLabel(m) : String(Math.floor(m / 60) % 12 || 12)}</span>)}
       </div>
       <div
         ref={track}

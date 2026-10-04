@@ -1348,14 +1348,7 @@ function RosterBuilder({
   const [shifts, setShifts] = useState<Shift[]>(event.draftShifts || []),
     [baseline, setBaseline] = useState(JSON.stringify(event.draftShifts || [])),
     [dayId, setDayId] = useState(event.days[0]?.id || ""),
-    [selectedPerson, setSelectedPerson] = useState<string | null>(
-      () => event.staff?.find((person) =>
-        person.status === "active" && event.responses?.some((response) =>
-          response.memberId === person.id && response.status === "submitted" &&
-          response.blocks.some((block) => block.dayId === event.days[0]?.id),
-        ),
-      )?.id || null,
-    ),
+    [selectedPerson, setSelectedPerson] = useState<string | null>(null),
     [note, setNote] = useState(""),
     [confirm, setConfirm] = useState(false),
     [problem, setProblem] = useState(""),
@@ -1467,7 +1460,7 @@ function RosterBuilder({
       <div className="ss-table-controls">
         <label>
           Roster day
-          <select value={dayId} onChange={(e) => setDayId(e.target.value)}>
+          <select value={dayId} onChange={(e) => {setDayId(e.target.value);setSelectedPerson(null);}}>
             {event.days.map((day) => (
               <option key={day.id} value={day.id}>
                 {dateLabel(day.date)}

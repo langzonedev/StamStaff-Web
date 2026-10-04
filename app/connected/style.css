@@ -1642,7 +1642,7 @@
   min-width: 0;
   position: relative;
 }
-.ss-lane-scroll { overflow-x: auto; max-width: 100%; padding: 3px 0 8px; }
+.ss-lane-scroll { max-width: 100%; padding: 3px 0 8px; }
 .ss-lane-canvas { position: relative; }
 .ss-lane-hours { position: relative; height: 30px; margin: 0 1px; font-size: 11px; color: var(--ss-ink); }
 .ss-lane-hours > span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
@@ -1896,5 +1896,39 @@
 .ss-event-details-form textarea {resize:vertical;}
 .ss-dialog {max-height:calc(100dvh - 32px); overflow-y:auto;}
 @media(max-width:600px){.ss-shift-response button{flex:1 1 120px;}.ss-event-banner{height:120px;}.ss-shifts article{padding:16px;}}
+
+/* Keep the roster on the page: no nested scroller or off-screen time axis. */
+.ss-lane-canvas { width: 100%; min-width: 0; }
+.ss-event-details-form input[type="file"] { max-width: 100%; min-width: 0; }
+@media (max-width: 700px) {
+  .ss-page-heading { position: relative; padding-top: 46px; margin-bottom: 12px; gap: 0; }
+  .ss-page-heading > .ss-actions { position: absolute; top: 0; left: 0; margin: 0; }
+  .ss-page-heading > .ss-actions button { min-height: 40px; padding: 8px 12px; }
+  .ss-page-heading:not(:has(.ss-actions > button:only-child)) { padding-top: 0; }
+  .ss-page-heading:not(:has(.ss-actions > button:only-child)) > .ss-actions { position: static; margin-top: 10px; }
+  .ss-page-heading h1 { font-size: 26px; }
+  .ss-page-heading p { margin: 4px 0 0; }
+  .ss-event-toolbar { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .ss-event-toolbar .ss-badges { flex: 1; gap: 5px; }
+  .ss-event-toolbar .ss-badge { font-size: 10px; padding: 5px 7px; }
+  .ss-event-toolbar > button { min-height: 44px; font-size: 12px; padding: 8px 10px; }
+  .ss-event-info-action { justify-content: stretch; margin-bottom: 12px; }
+  .ss-event-info-action > button { width: 100%; min-height: 44px; padding: 8px 12px; }
+  .ss-section-tabs { gap: 6px; }
+  .ss-section-tabs button { padding: 10px 6px; font-size: 11px; min-height: 48px; }
+  .ss-roster-row { padding: 12px; }
+  .ss-inline-editor { padding: 10px 0 0; }
+  .ss-inline-editor .ss-block-editor { padding: 10px; gap: 8px; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .ss-inline-editor select { font-size: 13px; padding: 10px 6px; min-width: 0; }
+  .ss-inline-editor label { font-size: 12px; min-width: 0; }
+  .ss-lane-hours { font-size: 10px; height: 26px; }
+  .ss-hour-minor { visibility: hidden; }
+  .ss-roster-assignment { font-size: 0; }
+  .ss-lane-shift-labels > span { font-size: 12px; }
+  .ss-table-controls { margin-bottom: 14px; gap: 10px; }
+  .ss-legend { flex-wrap: wrap; gap: 10px; }
+  .ss-dialog { padding: 18px; }
+  .ss-dialog > .ss-actions { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 10px; }
+}
 
 .ss-response-summary {margin-bottom:16px;}
