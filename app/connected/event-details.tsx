@@ -36,7 +36,7 @@ export function EventInformation({event,manager,mutate,run,disabled,blocked=fals
       const path=`${event.id}/${crypto.randomUUID()}.${extension}`;
       const {error:uploadError}=await accountClient().storage.from("event-banners").upload(path,file,{upsert:false,contentType:file.type});
       if(uploadError){
-        const status=Number("statusCode" in uploadError ? uploadError.statusCode : "status" in uploadError ? uploadError.status : 0);
+        const status=Number(uploadError.statusCode);
         setError(status===401 || status===403 ? "Your account could not upload this banner. Check your connection and account access, or ask an administrator. Your details and photo are kept." : "The banner could not be uploaded. Your details and photo are kept; try again.");throw uploadError;
       }
       next={...next,bannerPath:path};setDetails(next);setFile(null);
