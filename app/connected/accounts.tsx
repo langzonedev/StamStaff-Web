@@ -195,7 +195,8 @@ export function Team({
     [role, setRole] = useState<Member["role"]>("staff"),
     [setup, setSetup] = useState("");
   const [edit, setEdit] = useState<Edit | null>(null),
-    [confirm, setConfirm] = useState(false);
+    [confirm, setConfirm] = useState(false),
+    [removeInvitation, setRemoveInvitation] = useState(false);
   useEffect(() => {
     onDirty(Boolean(email || edit));
   }, [email, edit, onDirty]);
@@ -473,7 +474,35 @@ export function Team({
               </button>
             </div>
           </form>
+          {!edit.target.activated && <button
+            className="danger"
+            disabled={disabled}
+            onClick={() => setRemoveInvitation(true)}
+          >Remove invitation</button>}
+          {edit.target.activated && <p className="ss-help">Disable access to keep this person’s availability and roster history.</p>}
         </Panel>
+      )}
+      {removeInvitation && edit && (
+        <Confirm
+          title="Remove this invitation?"
+          busy={disabled}
+          label="Remove invitation"
+          cancel={() => setRemoveInvitation(false)}
+          accept={() => {
+            setRemoveInvitation(false);
+            void run(async () => {
+              await mutate("member_invitation_remove_v1", {
+                memberId: edit.target.id,
+                revision: edit.target.revision,
+              });
+              setEdit(null);
+              await load();
+            }, "Invitation removed.");
+          }}
+        >
+          <p><strong>{edit.target.email}</strong></p>
+          <p>This permanently removes their team invitation. They will no longer be able to set up access with it. No email will be sent.</p>
+        </Confirm>
       )}
       {confirm && edit && (
         <Confirm
