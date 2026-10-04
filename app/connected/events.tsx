@@ -1899,14 +1899,15 @@ function RosterBuilder({
                               <button disabled={disabled} onClick={() => editShifts(shifts.map((item) =>
                                 item.id === shift.id ? {...item, mealBreak: null} : item))}>Remove lunch</button>
                               {mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
-                            </> : <button disabled={disabled || shift.end-shift.start < 210}
+                            </> : <button disabled={disabled || shift.end-shift.start < 195}
                               onClick={() => {
-                                const start = shift.start + Math.max(15,Math.floor((shift.end-shift.start-30)/30)*15);
+                                const duration = Math.min(30, shift.end-shift.start-180);
+                                const start = shift.start + Math.max(15,Math.floor((shift.end-shift.start-duration)/30)*15);
                                 editShifts(shifts.map((item) => item.id === shift.id ?
-                                  {...item, mealBreak: {start, end:start+30}} : item));
+                                  {...item, mealBreak: {start, end:start+duration}} : item));
                               }}>Add unpaid lunch</button>}
                             <p>{scheduledHours(shift)} scheduled work time{shift.mealBreak ? " excluding unpaid lunch" : ""}</p>
-                            {!shift.mealBreak && shift.end-shift.start < 210 && <p className="ss-muted">A 30-minute lunch needs a shift of at least 3h 30m.</p>}
+                            {!shift.mealBreak && shift.end-shift.start < 195 && <p className="ss-muted">Extend the shift to add unpaid lunch and keep 3 work hours.</p>}
                             {!shift.mealBreak && mealProblem(shift) && <p role="alert" className="ss-notice error">{mealProblem(shift)}</p>}
                           </div>
                         </div>
