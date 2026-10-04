@@ -99,6 +99,7 @@ export function Confirm({
   accept,
   cancel,
   busy,
+  acceptDisabled = false,
   label = "Confirm",
 }: {
   title: string;
@@ -106,6 +107,7 @@ export function Confirm({
   accept: () => void;
   cancel: () => void;
   busy: boolean;
+  acceptDisabled?: boolean;
   label?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -128,7 +130,7 @@ export function Confirm({
         <button autoFocus disabled={busy} onClick={cancel}>
           Cancel
         </button>
-        <button className="primary" disabled={busy} onClick={accept}>
+        <button className="primary" disabled={busy || acceptDisabled} onClick={accept}>
           {busy ? "Saving…" : label}
         </button>
       </div>
