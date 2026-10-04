@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { timeLabel, type Block, type Day } from "./types";
+import { windowTimes } from "./paint";
 
 export type TimeDraft = { start: string; end: string };
 export function TimeRangeEntry({
@@ -10,6 +11,8 @@ export function TimeRangeEntry({
   onAdd,
   value,
   onChange,
+  windows,
+  minimum = 15,
 }: {
   day: Day;
   label: string;
@@ -17,8 +20,18 @@ export function TimeRangeEntry({
   onAdd: (block: Block) => boolean;
   value: TimeDraft;
   onChange: (value: TimeDraft) => void;
+  windows?: Block[];
+  minimum?: number;
 }) {
   const { start, end } = value;
+  const starts = windows ? windowTimes(windows, "start", undefined, minimum) : Array.from(
+    { length: (day.close - day.open) / 15 }, (_, i) => day.open + i * 15,
+  );
+  const ends = windows ? windowTimes(windows, "end", start === "" ? undefined : Number(start), minimum) : Array.from(
+    { length: (day.close - day.open) / 15 }, (_, i) => day.open + (i + 1) * 15,
+  );
+  const unavailable = (start !== "" && !starts.includes(Number(start))) ||
+    (end !== "" && !ends.includes(Number(end)));
   const [error, setError] = useState("");
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -33,15 +46,17 @@ export function TimeRangeEntry({
           disabled={disabled}
           value={start}
           onChange={(e) => {
-            onChange({ ...value, start: e.target.value });
+            const next = e.target.value;
+            const validEnd = !windows || end === "" || windowTimes(windows, "end", Number(next), minimum).includes(Number(end));
+            onChange({ start: next, end: validEnd ? end : "" });
             setError("");
           }}
         >
           <option value="">Choose time</option>
-          {Array.from(
-            { length: (day.close - day.open) / 15 },
-            (_, i) => day.open + i * 15,
-          ).map((m) => (
+          {start !== "" && !starts.includes(Number(start)) && (
+            <option value={start} disabled>{timeLabel(Number(start))} · unavailable</option>
+          )}
+          {starts.map((m) => (
             <option key={m} value={m}>
               {timeLabel(m)}
             </option>
@@ -60,10 +75,10 @@ export function TimeRangeEntry({
           }}
         >
           <option value="">Choose time</option>
-          {Array.from(
-            { length: (day.close - day.open) / 15 },
-            (_, i) => day.open + (i + 1) * 15,
-          ).map((m) => (
+          {end !== "" && !ends.includes(Number(end)) && (
+            <option value={end} disabled>{timeLabel(Number(end))} · unavailable</option>
+          )}
+          {ends.map((m) => (
             <option key={m} value={m}>
               {timeLabel(m)}
             </option>
@@ -71,7 +86,7 @@ export function TimeRangeEntry({
         </select>
       </label>
       <button
-        disabled={disabled || start === "" || end === ""}
+        disabled={disabled || unavailable || start === "" || end === ""}
         onClick={() => {
           if (Number(start) >= Number(end)) {
             setError("Choose an end time after the start time.");
