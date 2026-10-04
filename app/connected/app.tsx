@@ -32,9 +32,10 @@ import {
 import { Team, Profile } from "./accounts";
 import { recoveryAfterAuth, withoutRecoveryMarker } from "../account/recovery";
 import { Events } from "./events";
+import { Feedback } from "./feedback";
 import "./style.css";
 
-type Tab = "events" | "profile" | "team";
+type Tab = "events" | "profile" | "team" | "feedback";
 export default function ConnectedApp({
   initialTab = "events",
 }: {
@@ -390,6 +391,7 @@ export default function ConnectedApp({
               [
                 "events",
                 ...(member.isAdmin ? ["team"] : []),
+                "feedback",
                 "profile",
               ] as Tab[]
             ).map((item) => (
@@ -402,6 +404,8 @@ export default function ConnectedApp({
                   ? "Events & shifts"
                   : item === "team"
                     ? "Team accounts"
+                    : item === "feedback"
+                      ? "Feedback"
                     : "My profile"}
               </button>
             ))}
@@ -738,6 +742,15 @@ export default function ConnectedApp({
             <div key={`${member.id}:${member.role}:${member.isAdmin}`}>
               {tab === "events" ? (
                 <Events
+                  member={member}
+                  request={request}
+                  mutate={mutate}
+                  run={run}
+                  disabled={disabled}
+                  onDirty={setDirty}
+                />
+              ) : tab === "feedback" ? (
+                <Feedback
                   member={member}
                   request={request}
                   mutate={mutate}

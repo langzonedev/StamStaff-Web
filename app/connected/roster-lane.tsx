@@ -105,14 +105,11 @@ export function RosterLane({
             }}
           />
         )}
-        {shifts.filter((shift) => shift.mealBreak).map((shift) => <span
-          className="ss-lunch-marker" key={`lunch:${shift.id}`} title={`Lunch (unpaid): ${rangeLabel(shift.mealBreak!)}`}
-          style={{left:`${(shift.mealBreak!.start-day.open)/(day.close-day.open)*100}%`, width:`${(shift.mealBreak!.end-shift.mealBreak!.start)/(day.close-day.open)*100}%`}} />)}
       </div>
       </div>
       </div>
       {shifts.length > 0 && <div className="ss-lane-shift-labels">
-        {shifts.map((shift) => <span key={shift.id}>{rangeLabel(shift)} · {scheduledHours(shift)} scheduled{shift.mealBreak ? ` · Lunch (unpaid) ${rangeLabel(shift.mealBreak)}` : ""}</span>)}
+        {shifts.map((shift) => <span key={shift.id}>{rangeLabel(shift)} · {scheduledHours(shift)}</span>)}
       </div>}
       <span className="ss-sr" role="status">
         {announcement}

@@ -11,9 +11,11 @@ Responsive PWA for event availability and manager-published rosters. The public 
 - Administrator invitations and delegation to an already activated manager.
 - Event dates and trading hours, publication, response closing/reopening and archiving.
 - Multiple available blocks per day, with visible time dropdowns and optional timeline painting; private draft and explicit submission before roster publication.
-- Staff can report changed availability after roster publication with a comment. Confirmed shifts stay unchanged until a manager publishes a revised roster.
+- Staff availability locks after roster publication. Changes are discussed directly with the manager.
 - Manager day/event availability table, draft roster with availability visible underneath shifts, publication and change notes.
-- Staff see only their own published shifts. Roster updates are in-app, not notification email.
+- Staff see only their own published shifts and confirm or decline each one; declining requires a reason and leaves the assignment in place for manager review. Unchanged shifts keep their responses when the manager republishes.
+- Optional event banners and practical information distinguish events; separate private feedback goes to managers.
+- Event and roster notices use a private notification sender. Manager status distinguishes queued, failed and accepted by the mail server; inbox delivery is not guaranteed.
 - Online-only changes with pending/error/conflict states and unsaved-change protection.
 
 These are source implementation statements, not proof of a deployed service or successful live email delivery. The private repository records exact build, database, browser and release evidence.

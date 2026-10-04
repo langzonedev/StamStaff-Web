@@ -129,7 +129,7 @@ export function errorMessage(error: unknown) {
     SHIFT_OVERLAP:
       "A shift overlaps another assignment. Adjust its time before saving.",
     MINIMUM_SHIFT:
-      "Each shift needs at least 3 hours of scheduled work, excluding unpaid lunch. Your edits are kept.",
+      "Each shift needs at least 3 hours. Your edits are kept.",
     ACCOUNT_IN_USE:
       "This account has been set up or has saved history. Refresh team and disable access instead.",
     invalid_credentials:
