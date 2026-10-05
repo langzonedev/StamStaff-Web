@@ -100,6 +100,7 @@ export function Confirm({
   cancel,
   busy,
   acceptDisabled = false,
+  focusTitle = false,
   label = "Confirm",
 }: {
   title: string;
@@ -108,12 +109,15 @@ export function Confirm({
   cancel: () => void;
   busy: boolean;
   acceptDisabled?: boolean;
+  focusTitle?: boolean;
   label?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
-  }, []);
+    if (focusTitle) heading.current?.focus();
+  }, [focusTitle]);
   return (
     <dialog
       className="ss-dialog"
@@ -124,10 +128,10 @@ export function Confirm({
         else cancel();
       }}
     >
-      <h2 id="ss-confirm">{title}</h2>
+      <h2 id="ss-confirm" ref={heading} tabIndex={focusTitle ? -1 : undefined}>{title}</h2>
       {children}
       <div className="ss-actions">
-        <button autoFocus disabled={busy} onClick={cancel}>
+        <button autoFocus={!focusTitle} disabled={busy} onClick={cancel}>
           Cancel
         </button>
         <button className="primary" disabled={busy || acceptDisabled} onClick={accept}>

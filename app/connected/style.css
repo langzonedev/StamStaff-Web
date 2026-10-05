@@ -1932,3 +1932,21 @@
 }
 
 .ss-response-summary {margin-bottom:16px;}
+/* Availability is offered time, visually separate from assigned shifts. */
+.ss-availability-reference { padding: 1.25rem; margin-block: 1rem; border: 1px dashed var(--ss-line); border-radius: 16px; background: var(--ss-wash); }
+.ss-availability-reference h2 { font-size: 1.05rem; margin: 0; }
+.ss-availability-reference .ss-section-head { flex-wrap: wrap; gap: .5rem; }
+.ss-availability-reference details { margin-top: 1rem; }
+.ss-availability-reference summary { cursor: pointer; font-weight: 600; }
+.ss-reference-day { border-bottom: 1px solid var(--ss-line); padding-block: .75rem; }
+.ss-reference-day p { margin: .25rem 0 0; }
+.ss-awaiting-roster { margin-bottom: 0; font-weight: 600; }
+.ss-availability-review { display: grid; gap: .75rem; margin-block: 1rem; }
+.ss-availability-review section { padding: .75rem; border: 1px solid var(--ss-line); border-radius: 12px; }
+.ss-availability-review p { margin: .4rem 0 0; }
+.ss-availability-submit .ss-actions { flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .ss-availability-submit { align-items: stretch; }
+  .ss-availability-submit .ss-actions { display: grid; grid-template-columns: 1fr; }
+  .ss-availability-reference { padding: 1rem; }
+}
