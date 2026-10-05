@@ -1932,6 +1932,11 @@
 }
 
 .ss-response-summary {margin-bottom:16px;}
+.ss-event-attention { display: grid; gap: .75rem; }
+.ss-event-attention .ss-badges { flex-wrap: wrap; }
+.ss-event-attention .ss-badge { white-space: normal; }
+.ss-event-attention .ss-help { margin: 0; }
+.ss-notification-summary .ss-badge { margin-inline-start: .5rem; }
 /* Availability is offered time, visually separate from assigned shifts. */
 .ss-availability-reference { padding: 1.25rem; margin-block: 1rem; border: 1px dashed var(--ss-line); border-radius: 16px; background: var(--ss-wash); }
 .ss-availability-reference h2 { font-size: 1.05rem; margin: 0; }
