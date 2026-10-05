@@ -24,5 +24,5 @@ jobs:
       - run: npm run pages:build
         env:
           STAMSTAFF_STATIC_EXPORT: '1'
-          NEXT_PUBLIC_BASE_PATH: /StamStaff-Web
-          NEXT_PUBLIC_SITE_URL: https://langzonedev.github.io/StamStaff-Web/
+          NEXT_PUBLIC_BASE_PATH: ''
+          NEXT_PUBLIC_SITE_URL: https://stamstaff.com.au/
