@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { AppError, displayName, type Member } from "../account/client";
+import { AppError, displayName, errorMessage, type Member } from "../account/client";
 import {
   Badge,
   Confirm,
@@ -711,7 +711,7 @@ function EventWorkspace({
           >
             {event.publicationVersion > 0 && <PublishedShifts event={event} mutate={mutate} run={run} disabled={disabled || event.status === "archived"} saved={saved} onDirty={onDirty} />}
             <div>
-              {event.publicationVersion > 0 ? <SubmittedAvailability event={event} /> : <AvailabilityEditor
+              {event.publicationVersion > 0 || event.ownResponse?.status === "submitted" ? <SubmittedAvailability event={event} /> : <AvailabilityEditor
                 event={event}
                 mutate={mutate}
                 run={run}
@@ -768,7 +768,7 @@ function EventWorkspace({
                 ? event.publicationVersion > 0
                   ? "Staff availability remains locked. You can amend the roster."
                   : "Staff can no longer edit availability. You can reopen collection before the first roster is published."
-                : event.publicationVersion > 0 ? "Published availability remains locked. Staff must contact their manager for changes." : "Staff can revise their availability until you publish the roster."}
+                : event.publicationVersion > 0 ? "Published availability remains locked. Staff must contact their manager for changes." : "Staff with private drafts can submit. Already submitted availability stays locked."}
           </p>
         </Confirm>
       )}
@@ -915,6 +915,8 @@ function AvailabilityEditor({
     ),
     [selectedDayId, setSelectedDayId] = useState(event.days[0]?.id || ""),
     [error, setError] = useState(""),
+    [reviewing, setReviewing] = useState(false),
+    [submitting, setSubmitting] = useState(false),
     [pendingTimes, setPendingTimes] = useState<Record<string, TimeDraft>>({});
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
@@ -926,7 +928,7 @@ function AvailabilityEditor({
   const postPublication = event.publicationVersion > 0;
   const editable =
     event.status === "published" &&
-    !postPublication && event.availabilityOpen;
+    !postPublication && event.ownResponse?.status !== "submitted" && event.availabilityOpen;
   const dirty =
     JSON.stringify(blocks) !== baseline || hasPendingTimes;
   useEffect(() => onDirty(dirty), [dirty, onDirty]);
@@ -963,17 +965,17 @@ function AvailabilityEditor({
       if (invalidDay) setSelectedDayId(invalidDay.id);
       throw new AppError("INVALID_INPUT");
     }
-    const value = await mutate<EventDetail>("event_command_v1", {
-      action: "save_availability",
-      eventId: event.id,
-      revision: event.revision,
-      responseRevision: event.ownResponse?.revision ?? 0,
-      responseStatus: status,
-      blocks,
-    });
-    setBaseline(JSON.stringify(value.ownResponse?.blocks || []));
-    setBlocks(value.ownResponse?.blocks || []);
-    saved(value);
+    setSubmitting(true);
+    try {
+      const value = await mutate<EventDetail>("event_command_v1", {
+        action: "save_availability", eventId: event.id, revision: event.revision,
+        responseRevision: event.ownResponse?.revision ?? 0, responseStatus: status, blocks,
+      });
+      setBaseline(JSON.stringify(value.ownResponse?.blocks || []));
+      setBlocks(value.ownResponse?.blocks || []);
+      setReviewing(false); onDirty(false); saved(value);
+    } catch (failure) { setError(errorMessage(failure)); throw failure; }
+    finally { setSubmitting(false); }
   }
   return (
     <Panel
@@ -1177,16 +1179,53 @@ function AvailabilityEditor({
           })}
         </details>
       )}
-      {editable && <div className="ss-save-bar"><div><strong>{dirty ? "Unsaved changes" : event.ownResponse?.status === "submitted" ? "Availability submitted" : "Ready when you are"}</strong>{!blocks.length && <p>Submitting means unavailable for every event day.</p>}</div><div className="ss-actions"><button disabled={disabled} onClick={()=>run(()=>save("draft"),"Private draft saved. Submit when ready to share it.")}>Save private draft</button><button className="primary" disabled={disabled} onClick={()=>run(()=>save("submitted"),"Availability submitted to your manager.")}>Submit availability</button></div></div>}
+      {editable && <div className="ss-save-bar ss-availability-submit"><div>
+        <strong>{dirty ? "Unsaved availability" : event.ownResponse ? "Private draft saved" : "Availability for the whole event"}</strong>
+        <p>{event.days.length} {event.days.length === 1 ? "day" : "days"} · Submit once after reviewing every day.</p>
+      </div><div className="ss-actions">
+        <button disabled={disabled || !dirty} onClick={()=>run(()=>save("draft"),"Private draft saved.")}>Save draft</button>
+        <button className="primary" disabled={disabled} onClick={() => {
+          if (hasPendingTimes) {
+            const pendingDay = Object.entries(pendingTimes).find(([, value]) => value.start || value.end)?.[0];
+            if (pendingDay) setSelectedDayId(pendingDay);
+            setError("Add or clear your chosen times before reviewing all days.");
+            return;
+          }
+          const problem = validateBlocks(blocks, event.days);
+          if (problem) { setError(problem); return; }
+          setError(""); setReviewing(true);
+        }}>Review {event.days.length === 1 ? "event day" : `all ${event.days.length} days`}</button>
+      </div></div>}
+      {reviewing && <Confirm title="Review your availability" label={`Submit availability for ${event.days.length === 1 ? "this day" : `all ${event.days.length} days`}`}
+        busy={submitting} acceptDisabled={disabled} focusTitle cancel={() => setReviewing(false)} accept={() => {
+          void run(() => save("submitted"), "Availability submitted for the whole event. Changes are now closed.");
+        }}>
+        <p>This submits every event day. Changes close after submission. Contact your manager if you need a correction.</p>
+        {error && <p className="ss-notice error" role="alert">{error}</p>}
+        <div className="ss-availability-review">
+          {event.days.map(day => <section key={day.id}>
+            <div className="ss-section-head"><strong>{dateLabel(day.date)}</strong><button disabled={disabled} onClick={() => {setReviewing(false);setSelectedDayId(day.id);}}>Edit<span className="ss-sr"> {dateLabel(day.date)}</span></button></div>
+            <p className="ss-help">Trading {timeLabel(day.open)} – {timeLabel(day.close)}</p>
+            <p>{blocks.filter(block => block.dayId === day.id).sort((a,b) => a.start-b.start).map(rangeLabel).join(", ") || "Unavailable"}</p>
+          </section>)}
+        </div>
+        {!blocks.length && <p className="ss-notice warning">You are submitting no availability for this event.</p>}
+      </Confirm>}
     </Panel>
   );
 }
 
 function SubmittedAvailability({event}:{event:EventDetail}) {
-  return <details className="ss-options"><summary>Submitted availability · locked</summary>
-    {event.days.map(day => <div key={day.id}><strong>{dateLabel(day.date)}</strong><p>{event.ownResponse?.blocks.filter(b=>b.dayId===day.id).map(rangeLabel).join(", ") || "Unavailable"}</p></div>)}
-    <p className="ss-help">Contact your manager if your circumstances change.</p>
-  </details>;
+  const submitted = event.ownResponse?.status === "submitted";
+  return <section className="ss-availability-reference" aria-label="Availability reference">
+    <div className="ss-section-head"><h2>Availability reference</h2><Badge tone="quiet">{submitted ? "Submitted · Changes closed" : "Collection closed"}</Badge></div>
+    <p className="ss-help">These are the times you offered, not assigned shifts. Contact your manager for corrections.</p>
+    {submitted && <p className="ss-help">Submitted {new Intl.DateTimeFormat("en-AU",{day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",timeZone:"Australia/Adelaide"}).format(new Date(event.ownResponse!.updatedAt))} · Adelaide time</p>}
+    <details open={event.publicationVersion === 0}><summary>View {submitted ? "submitted availability" : event.ownResponse ? "saved draft" : "availability status"}</summary>
+      {event.days.map(day => <div className="ss-reference-day" key={day.id}><strong>{dateLabel(day.date)}</strong><p>{event.ownResponse?.blocks.filter(b=>b.dayId===day.id).sort((a,b)=>a.start-b.start).map(rangeLabel).join(", ") || (submitted ? "Unavailable" : "No availability submitted")}</p></div>)}
+    </details>
+    {event.publicationVersion === 0 && <p className="ss-awaiting-roster" role="status">Your shifts will appear separately when the roster is published.</p>}
+  </section>;
 }
 function PublishedShifts({event,mutate,run,disabled,saved,onDirty}:{event:EventDetail;mutate:Mutate;run:Run;disabled:boolean;saved:(event:EventDetail)=>void;onDirty:(dirty:boolean)=>void}) {
   if (!event.publicationVersion && event.availabilityOpen) return null;
