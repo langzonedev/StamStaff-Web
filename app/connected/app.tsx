@@ -524,7 +524,7 @@ export default function ConnectedApp({
                   ? "Use the email address your manager invited. Your role is assigned by your manager."
                   : mode === "reset"
                     ? "We’ll request a password reset email for your account."
-                    : ""}
+                    : "New here? Set up your invited account below."}
               </p>
               <form onSubmit={authSubmit}>
                 <label>

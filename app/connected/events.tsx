@@ -18,6 +18,7 @@ import { TimeRangeEntry, type TimeDraft } from "./time-range-entry";
 import { EventInformation, EventBanner } from "./event-details";
 import { ShiftResponse } from "./shift-responses";
 import { NotificationStatus, deliverNotifications } from "./notification-status";
+import { EventCardStatus } from "./event-card-status";
 import {
   chronologicalEvents,
   chronologicalShifts,
@@ -72,6 +73,7 @@ export function Events({
     [viewKey, setViewKey] = useState(0),
     [dirty, setDirty] = useState(false),
     [archive, setArchive] = useState(false);
+  const [cardRefreshKey, setCardRefreshKey] = useState(0);
   const deepLinkConsumed = useRef(false);
   useEffect(() => {
     let alive = true;
@@ -106,6 +108,7 @@ export function Events({
     setEvents(chronologicalEvents(value));
     setLoaded(true);
     setLoadError(false);
+    setCardRefreshKey(key => key + 1);
   }
   async function open(id: string) {
     const value = await request<EventDetail>("event_get_v1", { eventId: id });
@@ -282,17 +285,8 @@ export function Events({
                       {event.days.length}{" "}
                       {event.days.length === 1 ? "day" : "days"} · Adelaide time
                     </p>
-                    <button
-                      disabled={disabled}
-                      onClick={() => run(() => open(event.id))}
-                    >
-                      {manager
-                        ? "Open event"
-                        : event.availabilityOpen && !event.publicationVersion
-                          ? "View & add availability"
-                          : "View my shifts"}
-                      <span aria-hidden="true"> →</span>
-                    </button>
+                    <EventCardStatus key={`${event.id}:${event.revision}:${cardRefreshKey}`} event={event} manager={manager}
+                      request={request} run={run} disabled={disabled} refreshKey={cardRefreshKey} open={() => open(event.id)} />
                   </article>
                 ))}
             </div>
@@ -669,7 +663,7 @@ function EventWorkspace({
           </div>
           <div hidden={section !== "published"}>
             <PublishedRoster event={event} onReview={(memberId,dayId)=>{setReviewTarget({memberId,dayId});setSection("roster");}} />
-            <NotificationStatus eventId={event.id} revision={event.revision} request={request} mutate={mutate} run={run} disabled={disabled} />
+            <NotificationStatus eventId={event.id} revision={event.revision} request={request} mutate={mutate} run={run} disabled={disabled} active={section === "published"} />
           </div>
           {event.status !== "archived" && (
             <details className="ss-options">
