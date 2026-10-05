@@ -22,6 +22,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-width: 44px;
   min-height: 44px;
   padding: 10px 17px;
   border: 1px solid var(--ss-line);
@@ -75,6 +76,16 @@
 .ss-app textarea {
   resize: vertical;
   min-height: 86px;
+}
+.ss-app input,
+.ss-app select,
+.ss-app textarea {
+  transition: border-color 140ms, box-shadow 140ms;
+}
+.ss-app input:focus-visible,
+.ss-app select:focus-visible,
+.ss-app textarea:focus-visible {
+  border-color: var(--ss-focus);
 }
 .ss-app label {
   display: grid;
@@ -358,6 +369,33 @@
   box-shadow: 0 4px 18px #0002;
   z-index: 50;
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  max-width: calc(100vw - 32px);
+  bottom: max(20px, env(safe-area-inset-bottom));
+}
+.ss-working::before {
+  content: "";
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff55;
+  border-top-color: white;
+  border-radius: 50%;
+  animation: ss-working-spin 800ms linear infinite;
+}
+@keyframes ss-working-spin {
+  to { transform: rotate(360deg); }
+}
+.ss-app .ss-notice,
+.ss-app .ss-dialog[open] {
+  animation: ss-feedback-in 120ms ease-out;
+}
+@keyframes ss-feedback-in {
+  from { opacity: .85; }
+  to { opacity: 1; }
 }
 .ss-form-grid {
   display: grid;
@@ -381,6 +419,7 @@
   align-items: center;
   gap: 9px !important;
   font-size: 13px;
+  min-height: 44px;
 }
 .ss-check > input {
   min-height: 20px;
@@ -647,7 +686,7 @@
 }
 .ss-segment button {
   border: 0;
-  min-height: 38px;
+  min-height: 44px;
   font-size: 12px;
   background: transparent;
   padding: 8px 14px;
@@ -892,7 +931,7 @@
 .ss-roster-row button {
   font-size: 11px;
   padding: 7px;
-  min-height: 36px;
+  min-height: 44px;
 }
 .ss-roster-lane {
   height: 45px;
@@ -1033,7 +1072,7 @@
   padding: 5px 0;
   color: var(--ss-muted);
   font-size: 12px;
-  min-height: 36px;
+  min-height: 44px;
 }
 .ss-sr {
   position: absolute;
@@ -1490,12 +1529,12 @@
 }
 .ss-app button {
   transition:
-    background 140ms,
+    background-color 140ms,
     border-color 140ms,
-    transform 120ms;
+    box-shadow 140ms;
 }
 .ss-app button:active:not(:disabled) {
-  transform: translateY(1px);
+  box-shadow: inset 0 0 0 2px var(--ss-input-line);
 }
 .ss-app :focus-visible {
   outline-color: var(--ss-focus);
@@ -1608,6 +1647,9 @@
   background: var(--ss-positive);
   color: var(--ss-positive-ink);
   border-color: var(--ss-green);
+  box-shadow: inset 0 -3px 0 var(--ss-green);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .ss-legend .available {
   background: var(--ss-positive);
@@ -1901,9 +1943,9 @@
 .ss-lane-canvas { width: 100%; min-width: 0; }
 .ss-event-details-form input[type="file"] { max-width: 100%; min-width: 0; }
 @media (max-width: 700px) {
-  .ss-page-heading { position: relative; padding-top: 46px; margin-bottom: 12px; gap: 0; }
+  .ss-page-heading { position: relative; padding-top: 50px; margin-bottom: 12px; gap: 0; }
   .ss-page-heading > .ss-actions { position: absolute; top: 0; left: 0; margin: 0; }
-  .ss-page-heading > .ss-actions button { min-height: 40px; padding: 8px 12px; }
+  .ss-page-heading > .ss-actions button { min-height: 44px; padding: 8px 12px; }
   .ss-page-heading:not(:has(.ss-actions > button:only-child)) { padding-top: 0; }
   .ss-page-heading:not(:has(.ss-actions > button:only-child)) > .ss-actions { position: static; margin-top: 10px; }
   .ss-page-heading h1 { font-size: 26px; }
@@ -1936,7 +1978,16 @@
 .ss-event-attention .ss-badges { flex-wrap: wrap; }
 .ss-event-attention .ss-badge { white-space: normal; }
 .ss-event-attention .ss-help { margin: 0; }
+.ss-event-card > .ss-event-attention { margin-top: auto; padding-top: 12px; }
+.ss-event-attention > button { width: 100%; justify-content: space-between; }
 .ss-notification-summary .ss-badge { margin-inline-start: .5rem; }
+.ss-options > summary,
+.ss-availability-reference > details > summary,
+.ss-footer summary {
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+}
 /* Availability is offered time, visually separate from assigned shifts. */
 .ss-availability-reference { padding: 1.25rem; margin-block: 1rem; border: 1px dashed var(--ss-line); border-radius: 16px; background: var(--ss-wash); }
 .ss-availability-reference h2 { font-size: 1.05rem; margin: 0; }
