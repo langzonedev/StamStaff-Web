@@ -6,7 +6,7 @@ import RegisterServiceWorker from "./register-service-worker";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  "https://langzonedev.github.io/StamStaff-Web/";
+  "https://stamstaff.com.au/";
 
 export const metadata: Metadata = {
   metadataBase: new URL(new URL(siteUrl).origin),
