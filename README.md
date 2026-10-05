@@ -30,8 +30,8 @@ Build-time variables:
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `NEXT_PUBLIC_BASE_PATH` (empty for `stamstaff.com.au`)
-- `NEXT_PUBLIC_SITE_URL`
+- `NEXT_PUBLIC_BASE_PATH` (empty for the custom domain)
+- `NEXT_PUBLIC_SITE_URL` (`https://stamstaff.com.au/`)
 
 Only the project URL and publishable client key belong in the client. Never use a secret/service-role key or database password. Missing connection settings produce a clear setup-unavailable screen. The private backend must expose only its reviewed `api` RPC schema and enforce all permissions and transactional rules.
 
@@ -48,7 +48,7 @@ npm run lint
 npx tsc --noEmit
 ```
 
-The GitHub Pages workflow runs the static build and publishes `out/`. Reproduce with `STAMSTAFF_STATIC_EXPORT=1`, `NEXT_PUBLIC_BASE_PATH=''`, the site URL and the two Supabase variables, then run `npm run pages:build`. Do not run a build against `.next` while a Next dev process is using it.
+The GitHub Pages workflow runs the static build and publishes `out/`. Reproduce with `STAMSTAFF_STATIC_EXPORT=1`, an empty `NEXT_PUBLIC_BASE_PATH`, the site URL and the two Supabase variables, then run `npm run pages:build`. Do not run a build against `.next` while a Next dev process is using it.
 
 The service worker caches public shell assets and shows an offline page on failed navigation. It never caches Supabase account/API responses or private rosters. Writes require connectivity. Unsaved edits are held in memory; keep an editing tab open through a recoverable failure. Reloading or closing a tab can discard them.
 
