@@ -164,18 +164,27 @@
   color: var(--ss-ink) !important;
 }
 .ss-brand {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   min-width: 0;
   flex-shrink: 0;
   max-width: 60%;
 }
 .ss-business-name {
-  font-size: 12px;
+  border-left: 1px solid #617588;
+  padding-left: 14px;
+  font-size: 15px;
   font-weight: 650;
   line-height: 1.2;
   color: inherit;
   overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .ss-brand { gap: 8px; max-width: none; }
+  .ss-business-name { padding-left: 8px; font-size: 12px; }
+  .ss-header:has(.ss-business-name) { height: auto; min-height: 64px; flex-wrap: wrap; gap: 8px 16px; padding-block: 10px; }
+  .ss-header:has(.ss-business-name) .ss-user { margin-left: auto; }
 }
 .ss-logo > span {
   display: grid;
