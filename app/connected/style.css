@@ -163,6 +163,20 @@
   text-decoration: none !important;
   color: var(--ss-ink) !important;
 }
+.ss-brand {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 60%;
+}
+.ss-business-name {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: var(--ss-ink);
+  overflow-wrap: anywhere;
+}
 .ss-logo > span {
   display: grid;
   place-items: center;

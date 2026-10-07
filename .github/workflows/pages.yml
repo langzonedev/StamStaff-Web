@@ -33,6 +33,7 @@ jobs:
           STAMSTAFF_STATIC_EXPORT: '1'
           NEXT_PUBLIC_BASE_PATH: ''
           NEXT_PUBLIC_SITE_URL: https://stamstaff.com.au/
+          NEXT_PUBLIC_BUSINESS_NAME: ${{ vars.NEXT_PUBLIC_BUSINESS_NAME }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
       - run: touch out/.nojekyll
