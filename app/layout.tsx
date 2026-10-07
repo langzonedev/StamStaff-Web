@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./workflow.css";
 import RegisterServiceWorker from "./register-service-worker";
+import { businessName } from "./business";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const siteUrl =
@@ -10,7 +11,7 @@ const siteUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(new URL(siteUrl).origin),
-  title: "StamStaff — Simple event rostering",
+  title: businessName ? `${businessName} | StamStaff` : "StamStaff — Simple event rostering",
   description:
     "Share event availability and see your manager-confirmed shifts.",
   applicationName: "StamStaff",

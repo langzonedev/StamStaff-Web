@@ -7,6 +7,7 @@ import {
   type FormEvent,
 } from "react";
 import Image from "next/image";
+import { businessName } from "../business";
 import type { Session } from "@supabase/supabase-js";
 import {
   accountClient,
@@ -386,6 +387,7 @@ export default function ConnectedApp({
         Skip to content
       </a>
       <header className="ss-header">
+        <div className="ss-brand">
         <a className="ss-logo" href={`${basePath}/`}>
           <Image
             src={`${basePath}/icon.svg`}
@@ -396,6 +398,8 @@ export default function ConnectedApp({
           />
           Stam<em>Staff</em>
         </a>
+        {businessName && <span className="ss-business-name">{businessName}</span>}
+        </div>
         {session ? (
           <div className="ss-user">
             <span>
@@ -404,7 +408,7 @@ export default function ConnectedApp({
             <button onClick={leave}>Sign out</button>
           </div>
         ) : (
-          <span className="ss-tagline">StamStaff</span>
+          <span className="ss-tagline">Availability & shifts</span>
         )}
       </header>
       {member?.activated && !recovery && (
@@ -810,7 +814,7 @@ export default function ConnectedApp({
         )}
       </main>
       <footer className="ss-footer">
-        <span>StamStaff · Availability & rostering</span>
+        <span>{businessName ? `${businessName} · Powered by StamStaff` : "StamStaff · Availability & rostering"}</span>
         <span>Times shown in Adelaide time</span>
         <details>
           <summary>Privacy & help</summary>
