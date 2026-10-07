@@ -48,8 +48,8 @@ export function Feedback({ member, request, mutate, run, disabled, onDirty }: {
           setSubject(""); setMessage(""); onDirty(false);
         }, "Feedback sent to your managers.");
       }}>
-        <label>Subject<input required maxLength={120} value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
-        <label>Suggestion<textarea required maxLength={2000} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+        <label>Subject<input required disabled={disabled} maxLength={120} value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
+        <label>Suggestion<textarea required disabled={disabled} maxLength={2000} rows={5} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
         <div className="ss-actions"><button className="primary" disabled={disabled || !subject.trim() || !message.trim()}>Send feedback</button></div>
       </form>
     </Panel>}

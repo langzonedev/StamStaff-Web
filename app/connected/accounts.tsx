@@ -485,7 +485,8 @@ export function Team({
       {removeInvitation && edit && (
         <Confirm
           title="Remove this invitation?"
-          busy={disabled}
+          busy={false}
+          acceptDisabled={disabled}
           label="Remove invitation"
           cancel={() => setRemoveInvitation(false)}
           accept={() => {
@@ -507,7 +508,8 @@ export function Team({
       {confirm && edit && (
         <Confirm
           title={`Change access for ${edit.target.activated ? displayName(edit.target) : edit.target.email}?`}
-          busy={disabled}
+          busy={false}
+          acceptDisabled={disabled}
           cancel={() => setConfirm(false)}
           accept={() => {
             setConfirm(false);

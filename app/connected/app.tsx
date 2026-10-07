@@ -35,6 +35,15 @@ import { Events } from "./events";
 import { Feedback } from "./feedback";
 import "./style.css";
 
+function invalidatesAccess(error: unknown) {
+  return [
+    "ACCESS_DENIED",
+    "ACCESS_PAUSED",
+    "SESSION_EXPIRED",
+    "SIGN_IN_REQUIRED",
+  ].includes(errorCode(error));
+}
+
 type Tab = "events" | "profile" | "team" | "feedback";
 export default function ConnectedApp({
   initialTab = "events",
@@ -87,13 +96,28 @@ export default function ConnectedApp({
     setAccount(value);
     setGate("");
   }, []);
+  const invalidateAccess = useCallback((error: unknown) => {
+    ++epoch.current;
+    setAccount(null);
+    authority.current = null;
+    setGate(errorCode(error));
+    setDirty(false);
+    setReauth(false);
+    receipts.current.clear();
+    setNotice({ text: errorMessage(error), error: true });
+  }, []);
   const request: Request = useCallback(
     async <T,>(method: string, input?: object) => {
       const version = epoch.current;
       try {
         const value = await rpc<T>(method, input);
         if (version !== epoch.current) throw new AppError("STALE");
-        if (method.startsWith("event") || method === "members_list_v1") {
+        if (
+          method.startsWith("event") ||
+          method === "members_list_v1" ||
+          method.startsWith("feedback_") ||
+          method.startsWith("notifications_")
+        ) {
           const current = await rpc<AccountState>("account_session_v1");
           if (version !== epoch.current) throw new AppError("STALE");
           acceptAccount(current);
@@ -102,10 +126,16 @@ export default function ConnectedApp({
         return value;
       } catch (error) {
         if (version !== epoch.current) throw new AppError("STALE");
+        if (invalidatesAccess(error)) {
+          invalidateAccess(error);
+          // The current failure is already shown. Outer handlers must not replay
+          // it after a subsequent authentication event restores access.
+          throw new AppError("STALE");
+        }
         throw error;
       }
     },
-    [acceptAccount],
+    [acceptAccount, invalidateAccess],
   );
   const mutate: Mutate = useCallback(
     async <T,>(method: string, input: object) => {
@@ -126,27 +156,19 @@ export default function ConnectedApp({
     acceptAccount(value);
     return value;
   }, [request, acceptAccount]);
-  const handleError = useCallback((error: unknown) => {
-    const code = errorCode(error);
-    if (code === "STALE") return;
-    setNotice({ text: errorMessage(error), error: true });
-    if (code === "RECENT_LOGIN_REQUIRED") setReauth(true);
-    if (
-      [
-        "ACCESS_DENIED",
-        "ACCESS_PAUSED",
-        "SESSION_EXPIRED",
-        "SIGN_IN_REQUIRED",
-      ].includes(code)
-    ) {
-      ++epoch.current;
-      setAccount(null);
-      authority.current = null;
-      setGate(code);
-      setDirty(false);
-      receipts.current.clear();
-    }
-  }, []);
+  const handleError = useCallback(
+    (error: unknown) => {
+      const code = errorCode(error);
+      if (code === "STALE") return;
+      if (invalidatesAccess(error)) {
+        invalidateAccess(error);
+        return;
+      }
+      setNotice({ text: errorMessage(error), error: true });
+      if (code === "RECENT_LOGIN_REQUIRED") setReauth(true);
+    },
+    [invalidateAccess],
+  );
   const run: Run = async (action, success) => {
     if (lock.current) return;
     if (!navigator.onLine) {
@@ -248,7 +270,8 @@ export default function ConnectedApp({
         window.history.replaceState(
           null,
           "",
-          window.location.pathname + (recoveryIntent.current ? "?recovery=1" : ""),
+          window.location.pathname +
+            (recoveryIntent.current ? "?recovery=1" : ""),
         );
       // Keep asynchronous RPCs outside Supabase's synchronous auth callback lock.
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN")
@@ -406,7 +429,7 @@ export default function ConnectedApp({
                     ? "Team accounts"
                     : item === "feedback"
                       ? "Feedback"
-                    : "My profile"}
+                      : "My profile"}
               </button>
             ))}
           </div>

@@ -538,7 +538,8 @@ function EventEditor({
         <Confirm
           title="Publish this event?"
           label="Publish event"
-          busy={disabled}
+          busy={false}
+          acceptDisabled={disabled}
           cancel={() => setConfirm(false)}
           accept={() => {
             setConfirm(false);
@@ -733,7 +734,8 @@ function EventWorkspace({
                 ? "Close availability?"
                 : "Reopen availability?"
           }
-          busy={disabled}
+          busy={false}
+          acceptDisabled={disabled}
           label={
             confirmAction === "close_availability"
               ? "Close & build roster"
@@ -1820,7 +1822,8 @@ function RosterBuilder({
         <Confirm
           title="Publish this roster?"
           label="Publish roster"
-          busy={disabled}
+          busy={false}
+          acceptDisabled={disabled}
           cancel={() => setConfirm(false)}
           accept={() => {
             setConfirm(false);
