@@ -156,7 +156,19 @@ export function PrivacyNotice() {
         stored separately from your roster. Avoid sensitive personal details.
       </p>
       <p>
-        Core account and roster data is hosted in Australia. Email delivery and
+        Managers record and confirm your mobile number for event and roster SMS
+        alerts through touchSMS. You can see your number in My profile; ask your
+        manager for corrections. Other staff cannot see your number. Branded
+        alerts are one-way; respond to shifts in StamStaff. Account verification
+        and password recovery still use email.
+      </p>
+      <p>
+        Removing a number or leaving it unconfirmed stops new SMS attempts;
+        queued notices are retained. Messages already being sent or accepted by
+        the provider may still arrive.
+      </p>
+      <p>
+        Core account and roster data is hosted in Australia. SMS and email delivery and
         provider support may involve overseas processing. StamStaff does not
         sell your information or use it for marketing. Ask your manager about
         access, corrections or deletion.

@@ -552,7 +552,7 @@ function EventEditor({
                 }),
               );
               void deliverNotifications(event.id);
-            }, "Event published. Staff can now submit availability. Email notifications queued.");
+            }, "Event published. Staff can now submit availability. SMS alerts are queued; check SMS notifications for delivery status.");
           }}
         >
           <p>
@@ -1837,7 +1837,7 @@ function RosterBuilder({
               setNote("");
               saved(value);
               void deliverNotifications(event.id);
-            }, "Roster published. Staff can respond to their shifts. Email notifications queued.");
+            }, "Roster published. Staff can respond to their shifts. SMS alerts are queued; check SMS notifications for delivery status.");
           }}
         >
           <p>
