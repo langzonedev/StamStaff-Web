@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { NotificationMobileEditor, NotificationMobileSummary, useNotificationReadiness } from "./notification-mobile-panel";
+import { contactReadinessLabel, normalizeNotificationMobile } from "./notification-mobile";
 import {
   basePath,
   displayName,
@@ -167,6 +169,7 @@ export function Profile({
           </p>
           <PrivacyNotice />
         </Panel>
+        <NotificationMobileSummary request={request} run={run} disabled={disabled} />
       </div>
     </>
   );
@@ -192,14 +195,25 @@ export function Team({
     [loadError, setLoadError] = useState(false),
     [nextOffset, setNextOffset] = useState<number | null>(null);
   const [email, setEmail] = useState(""),
+    [inviteMobile, setInviteMobile] = useState(""),
+    [inviteConfirmed, setInviteConfirmed] = useState(false),
+    [inviteMobileError, setInviteMobileError] = useState(""),
     [role, setRole] = useState<Member["role"]>("staff"),
     [setup, setSetup] = useState("");
   const [edit, setEdit] = useState<Edit | null>(null),
     [confirm, setConfirm] = useState(false),
     [removeInvitation, setRemoveInvitation] = useState(false);
+  const [mobileDirty, setMobileDirty] = useState(false);
+  const [discardMobile, setDiscardMobile] = useState(false);
+  const [contactRevision, setContactRevision] = useState(0);
+  const readiness = useNotificationReadiness(request, contactRevision);
+  const inviteMobileInput = useRef<HTMLInputElement>(null);
+  const accessDirty = Boolean(edit && (edit.role !== edit.target.role ||
+    edit.isAdmin !== edit.target.isAdmin || edit.status !== edit.target.status));
+  const editorDirty = mobileDirty || accessDirty;
   useEffect(() => {
-    onDirty(Boolean(email || edit));
-  }, [email, edit, onDirty]);
+    onDirty(Boolean(email || inviteMobile || editorDirty));
+  }, [email, inviteMobile, editorDirty, onDirty]);
   const load = useCallback(
     async (offset = 0) => {
       const result = await request<{
@@ -209,6 +223,7 @@ export function Team({
       setMembers((current) =>
         offset ? [...current, ...result.members] : result.members,
       );
+      setContactRevision(value => value + 1);
       setNextOffset(result.nextOffset);
       setLoaded(true);
       setLoadError(false);
@@ -244,17 +259,26 @@ export function Team({
       </div>
       <Panel title="Prepare an invitation">
         <p>
-          Reserve their email address, then share the setup link. Each person
+          Reserve their email address and optionally add their notification mobile, then share the setup link. Each person
           chooses their own password and profile name.
         </p>
         <form
-          className="ss-inline-form"
+          className="ss-inline-form ss-mobile-invite"
           onSubmit={(event) => {
             event.preventDefault();
+            const phone = normalizeNotificationMobile(inviteMobile);
+            if (phone === null) {
+              setInviteMobileError("Enter an Australian mobile such as 0400 000 001, or leave it blank.");
+              inviteMobileInput.current?.focus(); return;
+            }
+            setInviteMobileError("");
             void run(async () => {
-              await mutate("member_invite_v1", { email: email.trim(), role });
+              await mutate("member_invite_with_contact_v1", {
+                email: email.trim(), role, phone, confirmed: Boolean(phone) && inviteConfirmed,
+              });
               setSetup(`${window.location.origin}${basePath}/account/#setup`);
               setEmail("");
+              setInviteMobile(""); setInviteConfirmed(false); setContactRevision(value => value + 1);
               await load();
             }, "Access prepared. Copy the link and send it to the person yourself; an invitation email has not been sent.");
           }}
@@ -272,6 +296,13 @@ export function Team({
             />
           </label>
           <label>
+            Notification mobile (optional)
+            <input ref={inviteMobileInput} type="tel" inputMode="tel" autoComplete="off" maxLength={64}
+              disabled={disabled} value={inviteMobile} aria-invalid={Boolean(inviteMobileError)}
+              aria-describedby={inviteMobileError ? "ss-invite-mobile-error" : "ss-invite-mobile-help"}
+              onChange={event => { setInviteMobile(event.target.value); setInviteConfirmed(false); setInviteMobileError(""); }} />
+          </label>
+          <label>
             Role
             <select
               value={role}
@@ -284,6 +315,13 @@ export function Team({
               <option value="manager">Manager</option>
             </select>
           </label>
+          <label className="ss-check">
+            <input type="checkbox" checked={inviteConfirmed} disabled={disabled || !inviteMobile.trim()}
+              onChange={event => setInviteConfirmed(event.target.checked)} />
+            I have checked this person’s notification mobile is correct.
+          </label>
+          <p id="ss-invite-mobile-help" className="ss-help">Staff keep the same email login. Only a manager-confirmed mobile receives SMS; you can add or correct it later through Manage.</p>
+          {inviteMobileError && <p id="ss-invite-mobile-error" role="alert" className="ss-notice error">{inviteMobileError}</p>}
           <button className="primary" disabled={disabled}>
             Prepare access
           </button>
@@ -322,6 +360,7 @@ export function Team({
           Administration lets a manager invite people and manage roles and
           access. Cloud provider ownership and billing are separate.
         </p>
+        {readiness.failed && <p role="status">SMS readiness could not be loaded. Refresh team before relying on these statuses.</p>}
         {loadError ? (
           <p className="ss-notice error" role="alert">
             Could not load team accounts. Try Refresh team.
@@ -362,10 +401,16 @@ export function Team({
                           ? "Active"
                           : "Awaiting setup"}
                     </Badge>
+                    {readiness.items.find(item => item.memberId === person.id) && (() => {
+                      const contact = readiness.items.find(item => item.memberId === person.id)!;
+                      return <Badge tone={contact.readiness === "confirmed" ? "green" : "amber"}>
+                        {contactReadinessLabel(contact.readiness)}{contact.maskedLast4 ? ` · ending ${contact.maskedLast4}` : ""}
+                      </Badge>;
+                    })()}
                   </div>
                 </div>
                 <button
-                  disabled={disabled}
+                  disabled={disabled || editorDirty}
                   onClick={() =>
                     setEdit({
                       target: person,
@@ -395,6 +440,9 @@ export function Team({
           title={`Manage ${edit.target.activated ? displayName(edit.target) : "invitation"}`}
         >
           <p>{edit.target.email}</p>
+          <NotificationMobileEditor key={edit.target.id} memberId={edit.target.id}
+            request={request} mutate={mutate} run={run} disabled={disabled}
+            onDirty={setMobileDirty} saved={() => setContactRevision(value => value + 1)} />
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -462,13 +510,13 @@ export function Team({
               delete the account and can be reversed.
             </p>
             <div className="ss-actions">
-              <button className="primary" disabled={disabled}>
+              <button className="primary" disabled={disabled || mobileDirty || !accessDirty}>
                 Review change
               </button>
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => setEdit(null)}
+                onClick={() => { if (editorDirty) setDiscardMobile(true); else setEdit(null); }}
               >
                 Cancel
               </button>
@@ -476,12 +524,16 @@ export function Team({
           </form>
           {!edit.target.activated && <button
             className="danger"
-            disabled={disabled}
+            disabled={disabled || editorDirty}
             onClick={() => setRemoveInvitation(true)}
           >Remove invitation</button>}
           {edit.target.activated && <p className="ss-help">Disable access to keep this person’s availability and roster history.</p>}
         </Panel>
       )}
+      {discardMobile && <Confirm title="Discard unsaved account changes?" label="Discard changes"
+        busy={false} acceptDisabled={disabled} cancel={() => setDiscardMobile(false)} accept={() => {
+          setDiscardMobile(false); setMobileDirty(false); setEdit(null);
+        }}><p>The entered mobile and access changes will be discarded. The saved account and contact will not change.</p></Confirm>}
       {removeInvitation && edit && (
         <Confirm
           title="Remove this invitation?"

@@ -68,6 +68,7 @@ const codes = [
   "LAST_ADMIN",
   "ACCESS_PAUSED",
   "INVALID_INPUT",
+  "INVALID_MOBILE",
   "RATE_LIMITED",
   "EMAIL_UNVERIFIED",
   "VERIFICATION_REQUIRED",
@@ -114,9 +115,11 @@ export function errorMessage(error: unknown) {
       "Another activated manager must have administration access before you remove the last administrator.",
     INVALID_INPUT:
       "Check the details you entered and try again. Your unsaved changes are kept.",
+    INVALID_MOBILE:
+      "Enter an Australian mobile such as 0400 000 001, or leave the notification number blank. Your changes are kept.",
     RATE_LIMITED: "Too many attempts. Wait a minute and try again.",
     NOT_FOUND:
-      "This event is no longer available. Return to the event list and refresh.",
+      "This record is no longer available. Refresh the current view.",
     EVENT_LIMIT:
       "This workspace has reached its event limit. Ask the business administrator for help.",
     OFFLINE:
