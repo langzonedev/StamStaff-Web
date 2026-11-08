@@ -280,6 +280,7 @@ export function Team({
           className="ss-inline-form ss-mobile-invite"
           onSubmit={(event) => {
             event.preventDefault();
+            if (editorDirty) return;
             const phone = normalizeNotificationMobile(inviteMobile);
             if (phone === null) {
               setInviteMobileError("Enter an Australian mobile such as 0400 000 001, or leave it blank.");
@@ -294,6 +295,7 @@ export function Team({
               setEmail("");
               setInviteMobile(""); setInviteConfirmed(false); setContactRevision(value => value + 1);
               await load();
+              setEdit(null);
             }, "Access prepared. Copy the link and send it to the person yourself; an invitation email has not been sent.");
           }}
         >
@@ -336,7 +338,7 @@ export function Team({
           </label>
           <p id="ss-invite-mobile-help" className="ss-help">Staff keep the same email login. Only a manager-confirmed mobile receives SMS; you can add or correct it later through Manage.</p>
           {inviteMobileError && <p id="ss-invite-mobile-error" role="alert" className="ss-notice error">{inviteMobileError}</p>}
-          <button className="primary" disabled={disabled}>
+          <button className="primary" disabled={disabled || editorDirty}>
             Prepare access
           </button>
         </form>
