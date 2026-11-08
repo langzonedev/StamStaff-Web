@@ -208,12 +208,26 @@ export function Team({
   const [contactRevision, setContactRevision] = useState(0);
   const readiness = useNotificationReadiness(request, contactRevision);
   const inviteMobileInput = useRef<HTMLInputElement>(null);
+  const editHeading = useRef<HTMLHeadingElement>(null);
+  const previousEditor = useRef<string | undefined>(undefined);
+  const editedId = edit?.target.id;
   const accessDirty = Boolean(edit && (edit.role !== edit.target.role ||
     edit.isAdmin !== edit.target.isAdmin || edit.status !== edit.target.status));
   const editorDirty = mobileDirty || accessDirty;
   useEffect(() => {
     onDirty(Boolean(email || inviteMobile || editorDirty));
   }, [email, inviteMobile, editorDirty, onDirty]);
+  useEffect(() => {
+    if (editedId) editHeading.current?.focus();
+    else if (previousEditor.current) {
+      document.getElementById(`ss-manage-member-${previousEditor.current}`)?.focus();
+    }
+    previousEditor.current = editedId;
+  }, [editedId]);
+  function closeEditor() {
+    if (editorDirty) setDiscardMobile(true);
+    else setEdit(null);
+  }
   const load = useCallback(
     async (offset = 0) => {
       const result = await request<{
@@ -351,7 +365,10 @@ export function Team({
       <Panel
         title="Team accounts"
         action={
-          <button disabled={disabled} onClick={() => run(() => load())}>
+          <button disabled={disabled || editorDirty} onClick={() => run(async () => {
+            await load();
+            setEdit(null);
+          })}>
             Refresh team
           </button>
         }
@@ -371,57 +388,158 @@ export function Team({
           <ul className="ss-members">
             {members.map((person) => (
               <li key={person.id}>
-                <div className="ss-avatar" aria-hidden="true">
-                  {displayName(person).slice(0, 1)}
-                </div>
-                <div className="ss-member-info">
-                  <strong>
-                    {person.activated
-                      ? displayName(person)
-                      : "Invitation pending"}
-                  </strong>
-                  <p>{person.email}</p>
-                  <div className="ss-badges">
-                    <Badge>{person.role}</Badge>
-                    {person.isAdmin && (
-                      <Badge tone="purple">Administrator</Badge>
-                    )}
-                    <Badge
-                      tone={
-                        person.status === "inactive"
-                          ? "quiet"
-                          : person.activated
-                            ? "green"
-                            : "amber"
-                      }
-                    >
-                      {person.status === "inactive"
-                        ? "Access disabled"
-                        : person.activated
-                          ? "Active"
-                          : "Awaiting setup"}
-                    </Badge>
-                    {readiness.items.find(item => item.memberId === person.id) && (() => {
-                      const contact = readiness.items.find(item => item.memberId === person.id)!;
-                      return <Badge tone={contact.readiness === "confirmed" ? "green" : "amber"}>
-                        {contactReadinessLabel(contact.readiness)}{contact.maskedLast4 ? ` · ending ${contact.maskedLast4}` : ""}
-                      </Badge>;
-                    })()}
+                <div className="ss-member-row">
+                  <div className="ss-avatar" aria-hidden="true">
+                    {displayName(person).slice(0, 1)}
                   </div>
+                  <div className="ss-member-info">
+                    <strong>
+                      {person.activated
+                        ? displayName(person)
+                        : "Invitation pending"}
+                    </strong>
+                    <p>{person.email}</p>
+                    <div className="ss-badges">
+                      <Badge>{person.role}</Badge>
+                      {person.isAdmin && (
+                        <Badge tone="purple">Administrator</Badge>
+                      )}
+                      <Badge
+                        tone={
+                          person.status === "inactive"
+                            ? "quiet"
+                            : person.activated
+                              ? "green"
+                              : "amber"
+                        }
+                      >
+                        {person.status === "inactive"
+                          ? "Access disabled"
+                          : person.activated
+                            ? "Active"
+                            : "Awaiting setup"}
+                      </Badge>
+                      {readiness.items.find(item => item.memberId === person.id) && (() => {
+                        const contact = readiness.items.find(item => item.memberId === person.id)!;
+                        return <Badge tone={contact.readiness === "confirmed" ? "green" : "amber"}>
+                          {contactReadinessLabel(contact.readiness)}{contact.maskedLast4 ? ` · ending ${contact.maskedLast4}` : ""}
+                        </Badge>;
+                      })()}
+                    </div>
+                  </div>
+                  <button
+                    id={`ss-manage-member-${person.id}`}
+                    aria-expanded={editedId === person.id}
+                    aria-controls={editedId === person.id ? `ss-member-editor-${person.id}` : undefined}
+                    disabled={disabled || (editorDirty && editedId !== person.id)}
+                    onClick={() =>
+                      editedId === person.id ? closeEditor() : setEdit({
+                        target: person,
+                        role: person.role,
+                        isAdmin: person.isAdmin,
+                        status: person.status,
+                      })
+                    }
+                  >
+                    {editedId === person.id ? "Close" : "Manage"}<span className="ss-sr"> {person.email}</span>
+                  </button>
                 </div>
-                <button
-                  disabled={disabled || editorDirty}
-                  onClick={() =>
-                    setEdit({
-                      target: person,
-                      role: person.role,
-                      isAdmin: person.isAdmin,
-                      status: person.status,
-                    })
-                  }
-                >
-                  Manage<span className="ss-sr"> {person.email}</span>
-                </button>
+                {edit?.target.id === person.id && (
+                  <section className="ss-member-editor" id={`ss-member-editor-${person.id}`}
+                    aria-labelledby={`ss-member-editor-title-${person.id}`}>
+                    <h3 id={`ss-member-editor-title-${person.id}`} ref={editHeading} tabIndex={-1}>
+                      Manage {edit.target.activated ? displayName(edit.target) : edit.target.email}
+                    </h3>
+                    <NotificationMobileEditor key={edit.target.id} memberId={edit.target.id}
+                      request={request} mutate={mutate} run={run} disabled={disabled}
+                      onDirty={setMobileDirty} saved={() => setContactRevision(value => value + 1)} />
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        setConfirm(true);
+                      }}
+                    >
+                      <div className="ss-form-grid">
+                        <label>
+                          Role
+                          <select
+                            value={edit.role}
+                            disabled={disabled}
+                            onChange={(event) => {
+                              const role = event.target.value as Member["role"];
+                              setEdit({
+                                ...edit,
+                                role,
+                                isAdmin: role === "staff" ? false : edit.isAdmin,
+                              });
+                            }}
+                          >
+                            <option value="staff">Staff</option>
+                            <option value="manager">Manager</option>
+                          </select>
+                        </label>
+                        <label>
+                          Access
+                          <select
+                            value={edit.status}
+                            disabled={disabled}
+                            onChange={(event) => {
+                              const status = event.target.value as Member["status"];
+                              setEdit({
+                                ...edit,
+                                status,
+                                isAdmin: status === "inactive" ? false : edit.isAdmin,
+                              });
+                            }}
+                          >
+                            <option value="active">Active</option>
+                            <option value="inactive">Disabled</option>
+                          </select>
+                        </label>
+                      </div>
+                      <label className="ss-check">
+                        <input
+                          type="checkbox"
+                          checked={edit.isAdmin}
+                          disabled={
+                            disabled ||
+                            !edit.target.activated ||
+                            edit.target.role !== "manager" ||
+                            edit.role !== "manager" ||
+                            edit.status !== "active"
+                          }
+                          onChange={(event) =>
+                            setEdit({ ...edit, isAdmin: event.target.checked })
+                          }
+                        />
+                        Manage team accounts
+                      </label>
+                      <p className="ss-help">
+                        Administration can be given to an activated, active manager. Save
+                        a change from staff to manager first. Disabling access does not
+                        delete the account and can be reversed.
+                      </p>
+                      <div className="ss-actions">
+                        <button className="primary" disabled={disabled || mobileDirty || !accessDirty}>
+                          Review change
+                        </button>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={closeEditor}
+                        >
+                          {editorDirty ? "Cancel" : "Done"}
+                        </button>
+                      </div>
+                    </form>
+                    {!edit.target.activated && <button
+                      className="danger"
+                      disabled={disabled || editorDirty}
+                      onClick={() => setRemoveInvitation(true)}
+                    >Remove invitation</button>}
+                    {edit.target.activated && <p className="ss-help">Disable access to keep this person’s availability and roster history.</p>}
+                  </section>
+                )}
               </li>
             ))}
           </ul>
@@ -435,101 +553,6 @@ export function Team({
           </button>
         )}
       </Panel>
-      {edit && (
-        <Panel
-          title={`Manage ${edit.target.activated ? displayName(edit.target) : "invitation"}`}
-        >
-          <p>{edit.target.email}</p>
-          <NotificationMobileEditor key={edit.target.id} memberId={edit.target.id}
-            request={request} mutate={mutate} run={run} disabled={disabled}
-            onDirty={setMobileDirty} saved={() => setContactRevision(value => value + 1)} />
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              setConfirm(true);
-            }}
-          >
-            <div className="ss-form-grid">
-              <label>
-                Role
-                <select
-                  value={edit.role}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    const role = event.target.value as Member["role"];
-                    setEdit({
-                      ...edit,
-                      role,
-                      isAdmin: role === "staff" ? false : edit.isAdmin,
-                    });
-                  }}
-                >
-                  <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
-                </select>
-              </label>
-              <label>
-                Access
-                <select
-                  value={edit.status}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    const status = event.target.value as Member["status"];
-                    setEdit({
-                      ...edit,
-                      status,
-                      isAdmin: status === "inactive" ? false : edit.isAdmin,
-                    });
-                  }}
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Disabled</option>
-                </select>
-              </label>
-            </div>
-            <label className="ss-check">
-              <input
-                type="checkbox"
-                checked={edit.isAdmin}
-                disabled={
-                  disabled ||
-                  !edit.target.activated ||
-                  edit.target.role !== "manager" ||
-                  edit.role !== "manager" ||
-                  edit.status !== "active"
-                }
-                onChange={(event) =>
-                  setEdit({ ...edit, isAdmin: event.target.checked })
-                }
-              />
-              Manage team accounts
-            </label>
-            <p className="ss-help">
-              Administration can be given to an activated, active manager. Save
-              a change from staff to manager first. Disabling access does not
-              delete the account and can be reversed.
-            </p>
-            <div className="ss-actions">
-              <button className="primary" disabled={disabled || mobileDirty || !accessDirty}>
-                Review change
-              </button>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => { if (editorDirty) setDiscardMobile(true); else setEdit(null); }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-          {!edit.target.activated && <button
-            className="danger"
-            disabled={disabled || editorDirty}
-            onClick={() => setRemoveInvitation(true)}
-          >Remove invitation</button>}
-          {edit.target.activated && <p className="ss-help">Disable access to keep this person’s availability and roster history.</p>}
-        </Panel>
-      )}
       {discardMobile && <Confirm title="Discard unsaved account changes?" label="Discard changes"
         busy={false} acceptDisabled={disabled} cancel={() => setDiscardMobile(false)} accept={() => {
           setDiscardMobile(false); setMobileDirty(false); setEdit(null);
