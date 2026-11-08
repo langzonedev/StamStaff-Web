@@ -437,6 +437,11 @@
 .ss-inline-form > button {
   flex-shrink: 0;
 }
+.ss-mobile-invite > .ss-check,
+.ss-mobile-invite > .ss-help,
+.ss-mobile-invite > [role="alert"] {
+  flex-basis: 100%;
+}
 .ss-check {
   display: flex !important;
   align-items: center;
