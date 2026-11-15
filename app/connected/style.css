@@ -2049,3 +2049,63 @@
   .ss-availability-submit .ss-actions { display: grid; grid-template-columns: 1fr; }
   .ss-availability-reference { padding: 1rem; }
 }
+.ss-print-roster {
+  display: none;
+}
+
+@page ss-roster {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+@media print {
+  body:has(> .ss-print-roster) > :not(.ss-print-roster) {
+    display: none !important;
+  }
+  .ss-print-roster {
+    display: block;
+    page: ss-roster;
+    background: white;
+    color: black;
+    font: 11pt/1.35 Arial, sans-serif;
+    overflow-wrap: anywhere;
+  }
+  .ss-print-roster header,
+  .ss-print-roster thead,
+  .ss-print-roster tr {
+    break-inside: avoid;
+  }
+  .ss-print-roster h1 {
+    font-size: 20pt;
+    margin: 0 0 1mm;
+  }
+  .ss-print-roster header p {
+    margin: 0 0 5mm;
+  }
+  .ss-print-roster table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 5mm;
+  }
+  .ss-print-roster thead {
+    display: table-header-group;
+  }
+  .ss-print-roster th,
+  .ss-print-roster td {
+    border: 1px solid #777;
+    padding: 2mm 3mm;
+    text-align: left;
+    vertical-align: top;
+  }
+  .ss-print-roster th[scope="col"]:nth-child(1) { width: 35%; }
+  .ss-print-roster th[scope="col"]:nth-child(2) { width: 29%; }
+  .ss-print-roster th[scope="col"]:nth-child(3) { width: 10%; }
+  .ss-print-roster-date { font-size: 12pt; }
+  .ss-print-roster .ss-badge {
+    border: 0;
+    padding: 0;
+    color: inherit;
+    background: none;
+    font: inherit;
+  }
+}

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { displayName } from "../account/client";
 import { Badge, Empty, Panel } from "./ui";
 import { ResponseBadge } from "./shift-responses";
@@ -13,6 +14,59 @@ import {
   type EventDetail,
   type Shift,
 } from "./types";
+
+function RosterPrintout({ event, days, shifts, staff }: {
+  event: EventDetail;
+  days: Day[];
+  shifts: Shift[];
+  staff: NonNullable<EventDetail["staff"]>;
+}) {
+  const names = new Map(staff.map(person => [person.id, displayName(person)]));
+  const date = new Intl.DateTimeFormat("en-AU", { dateStyle: "full", timeZone: "UTC" });
+  const published = new Intl.DateTimeFormat("en-AU", {
+    dateStyle: "medium", timeStyle: "short", timeZone: "Australia/Adelaide",
+  });
+  return (
+    <article className="ss-print-roster" aria-label="Printable published roster">
+      <header>
+        <h1>{event.name}</h1>
+        <p>Published roster · Version {event.publicationVersion}
+          {event.publishedAt && <> · Published {published.format(new Date(event.publishedAt))}</>}
+          {" · Adelaide time"}
+        </p>
+      </header>
+      {!days.length && <p>No roster days.</p>}
+      {days.map(day => {
+        const dayShifts = shifts.filter(shift => shift.dayId === day.id);
+        return (
+          <table key={day.id}>
+            <thead>
+              <tr><th colSpan={4} className="ss-print-roster-date">
+                {date.format(new Date(`${day.date}T12:00:00Z`))} · Trading {rangeLabel({ start: day.open, end: day.close })}
+              </th></tr>
+              <tr>
+                <th scope="col">Staff member</th>
+                <th scope="col">Shift</th>
+                <th scope="col">Hours</th>
+                <th scope="col">Response</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dayShifts.length ? dayShifts.map(shift => (
+                <tr key={shift.id}>
+                  <td>{names.get(shift.memberId)}</td>
+                  <td>{rangeLabel(shift)}</td>
+                  <td>{scheduledHours(shift)}</td>
+                  <td><ResponseBadge shift={shift} /></td>
+                </tr>
+              )) : <tr><td colSpan={4}>No published shifts</td></tr>}
+            </tbody>
+          </table>
+        );
+      })}
+    </article>
+  );
+}
 
 function PublishedLane({
   day,
@@ -57,6 +111,16 @@ export function PublishedRoster({ event, onReview }: { event: EventDetail; onRev
   const scroll = useRef<HTMLDivElement>(null),
     scrollPosition = useRef(0);
   const [overflow, setOverflow] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const finishPrinting = () => setPrinting(false);
+    window.addEventListener("afterprint", finishPrinting);
+    return () => window.removeEventListener("afterprint", finishPrinting);
+  }, []);
+  function printRoster() {
+    flushSync(() => setPrinting(true));
+    window.print();
+  }
   useEffect(() => {
     const element = scroll.current;
     if (!element) return;
@@ -89,8 +153,15 @@ export function PublishedRoster({ event, onReview }: { event: EventDetail; onRev
   return (
     <Panel
       title="Published roster"
-      action={<Badge tone="green">Version {event.publicationVersion}</Badge>}
+      action={<div className="ss-actions">
+        <Badge tone="green">Version {event.publicationVersion}</Badge>
+        <button type="button" onClick={printRoster}>Print roster</button>
+      </div>}
     >
+      {printing && createPortal(
+        <RosterPrintout event={event} days={days} shifts={shifts} staff={staff} />,
+        document.body,
+      )}
       <div className="ss-badges ss-response-summary"><Badge tone="green">{shifts.filter(shift=>shift.acknowledgement?.status === "confirmed").length} confirmed</Badge><Badge>{shifts.filter(shift=>!shift.acknowledgement || shift.acknowledgement.status === "pending").length} awaiting response</Badge><Badge tone="amber">{shifts.filter(shift=>shift.acknowledgement?.status === "declined").length} declined</Badge></div>
       {shifts.some(shift=>shift.acknowledgement?.status === "declined") && <div className="ss-notice" role="status"><strong>Declined shifts · manager review</strong>{shifts.filter(shift=>shift.acknowledgement?.status === "declined").map(shift=><div key={shift.id}><p><strong>{displayName(staff.find(person=>person.id === shift.memberId)!)}</strong> · {dateLabel(days.find(day=>day.id===shift.dayId)!.date)} · {rangeLabel(shift)}</p><p className="ss-decline-reason">{shift.acknowledgement?.reason}</p>{onReview && <button onClick={()=>onReview(shift.memberId,shift.dayId)}>Review in roster builder</button>}</div>)}</div>}
       <div className="ss-published-meta">
